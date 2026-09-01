@@ -2234,6 +2234,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     filters = { workTypes:new Set(), modes:new Set(), streams:new Set(), search:'', date:null };
     el.searchInput.value = '';
     saveToStorage(events, meta);
+    // Копия уезжает в хранилище сама и в фоне: расписание уже на экране, и
+    // заставлять человека ждать сетевой запрос незачем. Неудача не рушит
+    // загрузку — она оставляет отметку и повторится при следующем запуске.
+    saveScheduleQuietly();
     afterDataLoaded();
     // On mobile the calendar and the list are separate tabs. After a
     // successful load jump to the list, so the teacher immediately sees that
@@ -3806,6 +3810,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     auth:     'Хранилище не принимает ваш доступ: он отозван или изменён. Нужен новый пароль.',
     notFound: 'Хранилище не найдено — репозиторий удалён или переименован.',
     conflict: 'Не удалось записать: в это же хранилище пишут с другого устройства.',
+    gone:     'Этой копии больше нет — её удалили с другого устройства.',
     server:   'Сбой на стороне GitHub. Данные на месте, попробуйте позже.',
     unknown:  'Не удалось обратиться к хранилищу.'
   };
@@ -3981,6 +3986,156 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return attempt();
   }
 
+  // ---------- копии расписаний ----------
+  /* Копия появляется сама, сразу после удачной загрузки выгрузки. Кнопки
+     «сохранить» нет: человек уже сказал, чего хочет, когда выбрал файл.
+
+     Разбор с ошибкой копии не создаёт, и для этого ничего делать не пришлось —
+     при ошибке загрузка выбрасывает исключение раньше, чем расписание попадёт
+     в память, и commitLoad не вызывается вовсе. Мусор не попадает в хранилище
+     по устройству кода, а не по отдельной проверке.
+
+     Разбор с предупреждениями сохраняется, но помечается: расписание рабочее,
+     прятать его незачем, а в списке копий оно должно отличаться от чистого. */
+
+  var SNAPSHOT_DIR = 'schedules';
+
+  // Период — по занятиям без выбросов. Выброс это одинокая пара в январе при
+  // семестре с сентября по декабрь; приложение находит их само и показывает
+  // предупреждением. Возьми границы по крайним занятиям — и одна такая дата
+  // задаст имя файла, а исправленная выгрузка даст уже другое имя, и прежняя
+  // копия останется висеть навсегда, потому что заменять её будет нечем.
+  function snapshotPeriod(list, outliers){
+    var bad = {};
+    (outliers || []).forEach(function(o){ bad[o.dateKey] = true; });
+    var keys = [];
+    list.forEach(function(e){ if(!bad[e.dateKey]) keys.push(e.dateKey); });
+    // Если выбросами оказалось всё — берём как есть: пустое имя хуже кривого.
+    if(!keys.length) list.forEach(function(e){ keys.push(e.dateKey); });
+    if(!keys.length) return null;
+    keys.sort();
+    return { from: keys[0], to: keys[keys.length - 1] };
+  }
+
+  function snapshotName(period, warn){
+    return period.from + '_' + period.to + (warn ? '__warn' : '') + '.json';
+  }
+
+  // Разбор имени. Разделитель двойной, потому что в датах есть одинарный.
+  // Всё, чего не понимаем, отбрасывается: в каталоге может лежать что угодно,
+  // и чужой файл не должен появляться в списке копий.
+  function parseSnapshotName(name){
+    var m = /^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})(__warn)?\.json$/.exec(name);
+    if(!m) return null;
+    return { name: name, period: { from: m[1], to: m[2] }, warn: !!m[3] };
+  }
+
+  function hasWarnings(m){
+    return !!(m && ((m.skipped && m.skipped.length) || (m.outliers && m.outliers.length)));
+  }
+
+  function buildSnapshot(list, m, period){
+    return JSON.stringify({
+      version: 1,
+      savedAt: new Date().toISOString(),
+      period: period,
+      meta: m,
+      events: list
+    });
+  }
+
+  /* Сохранение копии.
+
+     Порядок строгий: сначала запись, потом уборка. Удали прежнюю копию раньше,
+     чем записана новая, и обрыв связи между этими двумя действиями оставит
+     человека без единой копии за период.
+
+     Убираются все прочие файлы того же периода, а не «прежнее имя»: смена
+     признака предупреждений меняет имя, и если прошлая замена оборвалась на
+     полпути, мусор мог остаться. */
+  function syncSaveSchedule(){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    if(!events.length) return Promise.reject(syncError('unknown'));
+
+    var warn = hasWarnings(meta);
+    var period = snapshotPeriod(events, meta && meta.outliers);
+    if(!period) return Promise.reject(syncError('unknown'));
+    var name = snapshotName(period, warn);
+    var path = SNAPSHOT_DIR + '/' + name;
+    var text = buildSnapshot(events, meta, period);
+
+    // Копия замещает прежнюю целиком, поэтому transform игнорирует то, что
+    // лежало в файле, — сливать тут нечего. Но пройти через updateFile всё
+    // равно нужно: он добывает sha и разбирает столкновение, если с другого
+    // устройства пишут в этот же файл.
+    return updateFile(path, 'Копия расписания за ' + period.from + ' — ' + period.to,
+      function(){ return text; }
+    ).then(function(){
+      return cleanupPeriod(period, name);
+    }).then(function(removed){
+      saveSyncState({ lastSyncAt: new Date().toISOString(), pendingSnapshot: null });
+      return { name: name, period: period, count: events.length,
+               warn: warn, replaced: removed };
+    });
+  }
+
+  // Уборка после записи. Ошибки здесь намеренно проглатываются: копия уже
+  // сохранена, и обрывать успех из-за неубранного дубля неправильно — он
+  // уберётся при следующем сохранении.
+  function cleanupPeriod(period, keepName){
+    return listDir(SNAPSHOT_DIR).then(function(items){
+      var doomed = [];
+      items.forEach(function(it){
+        var p = parseSnapshotName(it.name);
+        if(!p || it.name === keepName) return;
+        if(p.period.from === period.from && p.period.to === period.to){
+          doomed.push(it);
+        }
+      });
+      if(!doomed.length) return 0;
+      var done = 0;
+      return doomed.reduce(function(chain, it){
+        return chain.then(function(){
+          return deleteFile(SNAPSHOT_DIR + '/' + it.name, it.sha,
+            'Убрана прежняя копия за тот же период').then(function(){ done++; },
+            function(){ /* не убралось — не беда, копия на месте */ });
+        });
+      }, Promise.resolve()).then(function(){ return done; });
+    }, function(){ return 0; });
+  }
+
+  /* Копия, которая не доехала.
+
+     Расписание уже загружено и работает, а сети не было. Молчать нельзя:
+     человек был бы уверен, что копия есть. Отметка живёт в educal.sync.v1 и
+     снимается, когда копия наконец уедет.
+
+     Хранится не очередь, а один признак: копия отправляется с текущего
+     расписания, а оно всегда одно. Две выгрузки подряд без сети означают, что
+     сохранить надо последнюю, а не обе. */
+  function markSnapshotPending(){
+    saveSyncState({ pendingSnapshot: new Date().toISOString() });
+  }
+
+  function saveScheduleQuietly(){
+    if(!syncAvailable() || !events.length) return;
+    syncSaveSchedule().catch(function(err){
+      // auth и notFound повторять бессмысленно — они сами не пройдут, и
+      // отметка о недосланной копии только вводила бы в заблуждение.
+      if(err.kind === 'offline' || err.kind === 'server' || err.kind === 'conflict'){
+        markSnapshotPending();
+      }
+    });
+  }
+
+  // Досылка при запуске. Тихая: человек не просил её сейчас, и сообщать ему
+  // об очередной неудаче незачем — попробуем в следующий раз.
+  function flushPendingSnapshot(){
+    if(!syncAvailable()) return;
+    if(!syncState().pendingSnapshot) return;
+    saveScheduleQuietly();
+  }
+
   function init(){
     collectDom();
     bindStaticEvents();
@@ -4005,6 +4160,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       showNoData();
       renderShell();
     }
+    // Копия, не уехавшая в прошлый раз из-за отсутствия сети, досылается
+    // здесь — после того, как расписание уже на экране. Тихо: человек не
+    // просил её сейчас, и запуск приложения задерживать нечем.
+    flushPendingSnapshot();
   }
 
   // Обычно скрипт лежит в конце body и DOMContentLoaded ещё впереди. Но
