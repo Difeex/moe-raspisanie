@@ -3757,6 +3757,230 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
   }
 
+  // ---------- транспорт к приватному хранилищу ----------
+  /* Всё общение с GitHub идёт отсюда и только отсюда. Интерфейс сюда не лезет:
+     токен, повторы, разбор кодов ответа и слияние — не его забота, ему нужны
+     готовые ответы и один вид ошибки.
+
+     Хранилище у каждого своё: приватный репозиторий, адрес и токен к которому
+     лежат в расшифрованной записи входа. Без входа транспорта нет вовсе — при
+     работе с диска и на локальном сервере разработки синхронизировать некуда,
+     и это нормальное состояние, а не сбой.
+
+     Через service worker эти запросы не проходят: он пропускает мимо всё, что
+     уходит на чужой адрес. Кэшировать ответы хранилища нельзя — устаревший
+     ответ здесь означает потерянные данные. */
+
+  var GITHUB_API = 'https://api.github.com';
+  var STORAGE_SYNC = 'educal.sync.v1';
+
+  function syncAvailable(){
+    return !!(session && session.token && session.owner && session.repo);
+  }
+
+  // Что помнит синхронизация между запусками. lastSyncAt — время последнего
+  // удачного обмена, показывается человеку. pendingSnapshot — копия расписания,
+  // которая не уехала из-за отсутствия сети: без этой отметки обещание «копия
+  // появляется сразу» ломалось бы молча.
+  function syncState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_SYNC);
+      var s = raw ? JSON.parse(raw) : null;
+      if(s && typeof s === 'object') return s;
+    }catch(e){}
+    return { lastSyncAt: null, pendingSnapshot: null };
+  }
+
+  function saveSyncState(patch){
+    var s = syncState();
+    Object.keys(patch).forEach(function(k){ s[k] = patch[k]; });
+    try{ localStorage.setItem(STORAGE_SYNC, JSON.stringify(s)); }catch(e){}
+    return s;
+  }
+
+  // Один вид ошибки на весь транспорт. kind — чтобы интерфейс решал, что
+  // делать; message — готовая фраза, если решать не хочется. Разделение важно:
+  // 'auth' само не починится и требует человека, а 'offline' пройдёт само.
+  var SYNC_MESSAGES = {
+    offline:  'Нет связи с хранилищем. Данные на месте, попробуйте позже.',
+    auth:     'Хранилище не принимает ваш доступ: он отозван или изменён. Нужен новый пароль.',
+    notFound: 'Хранилище не найдено — репозиторий удалён или переименован.',
+    conflict: 'Не удалось записать: в это же хранилище пишут с другого устройства.',
+    server:   'Сбой на стороне GitHub. Данные на месте, попробуйте позже.',
+    unknown:  'Не удалось обратиться к хранилищу.'
+  };
+  function syncError(kind){
+    return { kind: kind, message: SYNC_MESSAGES[kind] || SYNC_MESSAGES.unknown };
+  }
+
+  /* base64 с кириллицей. btoa работает с байтами, а не с символами, и на
+     строке «принести проектор» падает: коды выше 255 в один байт не лезут.
+     Поэтому строка сначала переводится в UTF-8 байты, и уже они кодируются.
+     Проверено на настоящем хранилище — текст возвращается посимвольно. */
+  function toBase64(str){
+    var bytes = new TextEncoder().encode(str), bin = '', i;
+    // Посимвольно, а не String.fromCharCode.apply: apply на массиве в десятки
+    // тысяч элементов упирается в предел числа аргументов, а снимок
+    // расписания — это как раз десятки тысяч байт.
+    for(i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
+
+  function fromBase64(b64){
+    // GitHub отдаёт base64 разбитым на строки — переводы строк надо снять,
+    // иначе atob спотыкается.
+    var bin = atob(String(b64).replace(/\s/g, ''));
+    var bytes = new Uint8Array(bin.length), i;
+    for(i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  // Существование репозитория проверяется один раз за запуск и запоминается:
+  // спрашивать об этом на каждый 404 незачем, а различить «нет файла» и «нет
+  // хранилища» иначе нечем — GET отвечает 404 в обоих случаях.
+  var repoChecked = null;
+
+  function apiFetch(method, path, body, opts){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    var url = GITHUB_API + '/repos/' + session.owner + '/' + session.repo + path;
+    var init = {
+      method: method,
+      headers: {
+        'Authorization': 'Bearer ' + session.token,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    };
+    if(body) init.body = JSON.stringify(body);
+    // keepalive нужен единственному случаю — отправке заметок при уходе со
+    // страницы. Обычный запрос браузер там обрывает, этот доживает.
+    if(opts && opts.keepalive) init.keepalive = true;
+
+    return fetch(url, init).then(function(res){
+      if(res.ok) return res.status === 204 ? null : res.json();
+      throw syncError(classifyStatus(res, method));
+    }, function(){
+      // Отказ самого fetch означает, что запрос не ушёл: нет сети, обрыв,
+      // заблокированный адрес. Ответ сервера сюда не попадает никогда.
+      throw syncError('offline');
+    });
+  }
+
+  function classifyStatus(res, method){
+    var code = res.status;
+    if(code === 401) return 'auth';
+    if(code === 403){
+      // 403 бывает двух разных природ: «прав нет» и «превышен предел
+      // обращений». Второе проходит само и человека тревожить не должно.
+      var left = res.headers.get('x-ratelimit-remaining');
+      return left === '0' ? 'server' : 'auth';
+    }
+    if(code === 429) return 'server';
+    // 404 на запись означает именно отсутствие репозитория: запись в
+    // существующий так не отвечает, даже если файла в нём нет. На чтении
+    // 404 неоднозначен и разбирается в readFile.
+    if(code === 404) return 'notFound';
+    // 422 — это «sha не прислан» или «sha не тот»: то же самое, что 409,
+    // только другим кодом. Проверено на настоящем хранилище; обходится тем
+    // же способом — перечитать и записать заново.
+    if(code === 409 || code === 422) return 'conflict';
+    if(code >= 500) return 'server';
+    return 'unknown';
+  }
+
+  function repoExists(){
+    if(repoChecked !== null) return Promise.resolve(repoChecked);
+    return apiFetch('GET', '').then(function(){
+      repoChecked = true; return true;
+    }, function(err){
+      if(err.kind === 'notFound'){ repoChecked = false; return false; }
+      throw err;
+    });
+  }
+
+  function encodePath(path){
+    // Каждый кусок пути кодируется отдельно: косые черты в адресе должны
+    // остаться разделителями, а не превратиться в %2F.
+    return path.split('/').map(encodeURIComponent).join('/');
+  }
+
+  // Чтение файла. Отсутствие файла — не ошибка, а пустое хранилище: так
+  // выглядит первый запуск, и сообщать о сбое тут нечего. Но «нет файла» и
+  // «нет репозитория» приходят одним кодом, поэтому в этом единственном месте
+  // делается лишний запрос — и только когда 404 действительно случился.
+  function readFile(path){
+    return apiFetch('GET', '/contents/' + encodePath(path)).then(function(r){
+      return { sha: r.sha, text: fromBase64(r.content) };
+    }, function(err){
+      if(err.kind !== 'notFound') throw err;
+      return repoExists().then(function(ok){
+        if(!ok) throw syncError('notFound');
+        return null;
+      });
+    });
+  }
+
+  // Список файлов каталога. Пустой каталог и отсутствующий каталог — одно и
+  // то же: копий пока нет.
+  function listDir(path){
+    return apiFetch('GET', '/contents/' + encodePath(path)).then(function(r){
+      return Array.isArray(r) ? r : [];
+    }, function(err){
+      if(err.kind !== 'notFound') throw err;
+      return repoExists().then(function(ok){
+        if(!ok) throw syncError('notFound');
+        return [];
+      });
+    });
+  }
+
+  // Запись. sha обязателен, когда файл уже есть, и должен отсутствовать,
+  // когда файла нет: GitHub отвергает и то и другое наоборот.
+  function writeFile(path, text, sha, message){
+    var body = { message: message, content: toBase64(text) };
+    if(sha) body.sha = sha;
+    return apiFetch('PUT', '/contents/' + encodePath(path), body)
+      .then(function(r){ return { sha: r.content.sha }; });
+  }
+
+  function deleteFile(path, sha, message){
+    return apiFetch('DELETE', '/contents/' + encodePath(path),
+      { message: message, sha: sha }).then(function(){ return true; });
+  }
+
+  /* Чтение, изменение и запись одним куском — с разбором столкновения.
+
+     Столкновение здесь настоящее, а не теоретическое: два устройства одного
+     человека пишут заметки в один файл. GitHub его и ловит — запись проходит
+     только с тем sha, который был у файла при чтении. Не совпал — значит
+     между нашим чтением и записью кто-то успел записать своё, и наша версия
+     построена на устаревших данных.
+
+     Разбирается это единственным честным способом: перечитать, слить заново
+     поверх свежего, записать. Взять и затереть чужое нельзя — это молча
+     потерянные заметки.
+
+     Три попытки, а не бесконечность: если не разошлось трижды подряд, значит
+     на другом устройстве пишут прямо сейчас и непрерывно, и правильнее
+     сказать об этом человеку, чем крутиться дальше. */
+  function updateFile(path, message, transform){
+    var tries = 0;
+    function attempt(){
+      tries++;
+      return readFile(path).then(function(current){
+        var next = transform(current ? current.text : null);
+        // transform вернул null — менять нечего, ходить в сеть незачем.
+        if(next === null || next === undefined) return null;
+        return writeFile(path, next, current ? current.sha : null, message)
+          .catch(function(err){
+            if(err.kind === 'conflict' && tries < 3) return attempt();
+            throw err;
+          });
+      });
+    }
+    return attempt();
+  }
+
   function init(){
     collectDom();
     bindStaticEvents();
