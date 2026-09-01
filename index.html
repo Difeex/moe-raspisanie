@@ -1885,14 +1885,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           if(isNoteKey(k) && isNoteValue(parsed[k])){ out[k] = parsed[k]; взято++; }
         });
         // Отброшенные записи — не мелочь: каждая это пропавшая заметка.
-        if(взято !== всего) notesReadNote = { код: 'часть записей негодна',
-          подробность: { всего: всего, взято: взято } };
+        if(взято !== всего) notesReadNote = { code: 'some entries invalid',
+          detail: { total: всего, kept: взято } };
       } else {
-        notesReadNote = { код: 'хранилище не того вида' };
+        notesReadNote = { code: 'storage wrong shape' };
       }
     }catch(e){
-      notesReadNote = { код: 'хранилище не прочиталось',
-        подробность: { причина: (e && e.name) ? e.name : 'неизвестно' } };
+      notesReadNote = { code: 'storage unreadable',
+        detail: { reason: (e && e.name) ? e.name : 'unknown' } };
     }
     return out;
   }
@@ -2240,8 +2240,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(events.length){
         // Замену человек может и отменить — тогда в журнале останется
         // «спрошено» без «подтверждена», и молчание приложения объяснится.
-        logEvent('расписание', 'замена спрошена',
-          { было: events.length, вФайле: parsed.length });
+        logEvent('schedule', 'replace asked',
+          { have: events.length, inFile: parsed.length });
         pendingLoad = { events: parsed, meta: newMeta };
         askConfirm('Заменить расписание?',
           'Сейчас загружено занятий: ' + events.length + '. Они будут заменены данными из файла «' +
@@ -2253,7 +2253,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }).catch(function(err){
       // Имя файла не записывается: в нём бывает ФИО. Причина отказа — это
       // фраза самого приложения, в ней персональных данных нет.
-      logEvent('выгрузка', 'разбор не удался', err && err.message ? err.message : 'неизвестно');
+      logEvent('upload', 'parse failed', err && err.message ? err.message : 'unknown');
       scheduleLogSync();
       showUploadError(err && err.message ? err.message : 'Не удалось прочитать файл. Проверьте, что это выгрузка расписания в формате .xlsx.');
     });
@@ -2264,8 +2264,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function applyPendingLoad(staged){
     if(!staged) return;
-    logEvent('расписание', 'замена подтверждена',
-      { было: events.length, станет: staged.events.length });
+    logEvent('schedule', 'replace confirmed',
+      { from: events.length, to: staged.events.length });
     commitLoad(staged.events, staged.meta);
   }
 
@@ -2283,9 +2283,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     saveToStorage(events, meta);
     // Счётчики, а не содержимое: сами пропущенные строки несут названия
     // дисциплин, и в журнале им делать нечего.
-    logEvent('выгрузка', 'разобрана', { занятий: newMeta.count,
-      пропущено: (newMeta.skipped || []).length,
-      выбросов: (newMeta.outliers || []).length });
+    logEvent('upload', 'parsed', { lessons: newMeta.count,
+      skipped: (newMeta.skipped || []).length,
+      outliers: (newMeta.outliers || []).length });
     // Копия уезжает в хранилище сама и в фоне: расписание уже на экране, и
     // заставлять человека ждать сетевой запрос незачем. Неудача не рушит
     // загрузку — она оставляет отметку и повторится при следующем запуске.
@@ -2347,8 +2347,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // Расписание в хранилище было, но не прочиталось. Приложение покажет
       // «не загружено», и без этой записи выглядело бы, будто человек его
       // никогда и не грузил.
-      if(raw) logEvent('расписание', 'хранилище не прочиталось',
-        { причина: (e && e.name) ? e.name : 'неизвестно', символов: raw.length });
+      if(raw) logEvent('schedule', 'storage unreadable',
+        { reason: (e && e.name) ? e.name : 'unknown', chars: raw.length });
       return null;
     }
   }
@@ -2421,9 +2421,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var стало = !!noteText(ключ);
     // Дата — да, текст — никогда. Без даты «стёртая заметка воскресла»
     // неотличимо от «заметка не сохранилась».
-    if(!было && стало) logEvent('заметка', 'создана', ключ);
-    else if(было && стало) logEvent('заметка', 'изменена', ключ);
-    else if(было && !стало) logEvent('заметка', 'очищена', ключ);
+    if(!было && стало) logEvent('note', 'created', ключ);
+    else if(было && стало) logEvent('note', 'edited', ключ);
+    else if(было && !стало) logEvent('note', 'emptied', ключ);
     noteEditingKey = null;
     if(flipped) renderCalendar();
     renderNote();
@@ -2439,7 +2439,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(had) notes[dateKey] = { text: '', updatedAt: new Date().toISOString() };
       saveNotes();
     }
-    if(had) logEvent('заметка', 'удалена', dateKey);
+    if(had) logEvent('note', 'deleted', dateKey);
     if(noteEditingKey === dateKey){
       if(noteSaveTimer){ clearTimeout(noteSaveTimer); noteSaveTimer = null; }
       noteEditingKey = null;
@@ -3419,13 +3419,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function askClearData(){
     // Как и с заменой: пара «спрошено» без «очищено» показывает, что человек
     // передумал, и молчание приложения объясняется.
-    logEvent('расписание', 'очистка спрошена', { занятий: events.length });
+    logEvent('schedule', 'clear asked', { lessons: events.length });
     askConfirm('Очистить все данные?',
       'Загруженное расписание будет удалено из этого браузера.',
       'Очистить', clearAllData);
   }
   function clearAllData(){
-    logEvent('расписание', 'очищено', { былоЗанятий: events.length });
+    logEvent('schedule', 'cleared', { lessons: events.length });
     hideUploadError();
     hideLoadNotice();
     events = [];
@@ -3652,6 +3652,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      переписку как есть и не тратят четверть объёма на повторяющиеся имена
      полей.
 
+     ЯРЛЫКИ, КОДЫ И ИМЕНА ПОЛЕЙ — НА ЛАТИНИЦЕ, в отличие от всего остального в
+     этом проекте. Причина не в моде: журнал это показания приборов, а не текст
+     для человека, и в UTF-8 латиница занимает байт на символ против двух у
+     кириллицы. При том же объёме файла помещается вдвое больше строк, а
+     упереться нам предстоит именно в объём.
+
+     Сообщения, приходящие из самого приложения, остаются как есть: они
+     написаны для пользователя, и переводить их в журнале значило бы
+     показывать не то, что человек видел на экране.
+
      ЧЕГО ЗДЕСЬ НЕ ДОЛЖНО БЫТЬ НИКОГДА: токенов, паролей, текста заметок, ФИО,
      групп, аудиторий, названий дисциплин, имён загружаемых файлов. Только
      коды, счётчики и время. Причина не в законе о данных, а в том, что журнал
@@ -3735,15 +3745,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function logPath(){ return 'logs/' + device.id + '.txt'; }
   /* Пределы кольца. Верхнюю границу задаёт не localStorage, а GitHub:
      Contents API отдаёт содержимое файла только до мегабайта, а updateFile
-     читает log.txt перед записью — за sha и чтобы сравнить содержимое.
+     читает файл журнала перед записью — за sha и чтобы сравнить содержимое.
      Перерасти мегабайт значит сломать отправку журнала о него самого.
 
-     2000 строк по 110 символов в среднем — около 220 КБ, то есть четырёхкратный
-     запас до предела. localStorage это не стеснит даже с учётом того, что
-     кириллица хранится там по два байта на символ: выйдет около полумегабайта
-     против обычных пяти. */
-  var LOG_MAX = 2000;
-  var LOG_MAX_CHARS = 250000;
+     3000 строк по 112 байт в среднем — около 350 КБ, почти трёхкратный запас.
+     Столько помещается именно потому, что журнал ведётся на латинице: в UTF-8
+     она занимает байт на символ, а кириллица два, и те же 350 КБ вместили бы
+     вдвое меньше строк. */
+  var LOG_MAX = 3000;
+  var LOG_MAX_CHARS = 350000;
   // Отсрочка перед отправкой после отказа: события ходят пачками — не тот
   // пароль, ещё раз не тот, потом битый файл, — и уезжать надо один раз за
   // пачку, а не на каждую строку.
@@ -3801,7 +3811,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Версия — время сборки самого файла. Ручной нумерации не нужно, и забыть
   // обновить её невозможно.
   function appVersion(){
-    var дата = 'неизвестна';
+    var дата = 'unknown';
     try{
       var d = new Date(document.lastModified);
       if(!isNaN(d.getTime())){
@@ -3827,7 +3837,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
        Первый запуск такой строки не даёт: сравнивать не с чем, и «версия
        изменилась» на пустом месте только сбивала бы. */
     if(device.version && device.version !== версия){
-      logEvent('запуск', 'версия изменилась', { было: device.version, стало: версия });
+      logEvent('start', 'build changed', { from: device.version, to: версия });
     }
     if(device.version !== версия){
       device.version = версия;
@@ -3842,14 +3852,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // запомненным: разойдутся — значит определили неверно, и это должно быть
     // видно, а не спрятано.
     var видСейчас = detectKind();
-    logEvent('запуск', 'среда', {
-      сборка: версия,
-      устройство: device.id,
-      вид: видСейчас === device.kind ? device.kind : (device.kind + '→' + видСейчас),
-      приложение: standalone ? 'установлено' : 'вкладка',
-      sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 'управляет' : 'нет',
-      сеть: (navigator.onLine === false) ? 'нет' : 'есть',
-      ширина: window.innerWidth || 0
+    logEvent('start', 'env', {
+      build: версия,
+      device: device.id,
+      kind: видСейчас === device.kind ? device.kind : (device.kind + '->' + видСейчас),
+      mode: standalone ? 'installed' : 'tab',
+      sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 'controlling' : 'no',
+      net: (navigator.onLine === false) ? 'no' : 'yes',
+      width: window.innerWidth || 0
     });
     // Занятое место спрашивается отдельно: ответ приходит с задержкой, а
     // задерживать из-за него запуск незачем. Пригождается он ровно тогда,
@@ -3859,7 +3869,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         navigator.storage.estimate().then(function(e){
           if(!e) return;
           var кб = function(n){ return Math.round((n || 0) / 1024); };
-          logEvent('запуск', 'место', { занято: кб(e.usage) + 'КБ', всего: кб(e.quota) + 'КБ' });
+          logEvent('start', 'space', { used: кб(e.usage) + 'KB', quota: кб(e.quota) + 'KB' });
         }, function(){});
       }
     }catch(e){}
@@ -3879,11 +3889,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // перестанет читаться и построчно, и целиком.
     logStore.lines.push(строка.replace(/\s*[\r\n]+\s*/g, ' '));
 
-    // Кольцо: старое вытесняется. Ограничение двойное — по числу записей и по
-    // объёму, потому что одна запись бывает заметно длиннее прочих.
+    /* Кольцо: старое вытесняется. Ограничение двойное — по числу записей и по
+       объёму, потому что одна запись бывает заметно длиннее прочих.
+
+       Выбрасывается ровно столько, сколько нужно, а не доля от всего.
+       Отрезание четверти за раз держало бы журнал на трёх четвертях ёмкости и
+       выбрасывало бы сотни строк там, где мешает одна. */
     if(logStore.lines.length > LOG_MAX) logStore.lines = logStore.lines.slice(-LOG_MAX);
-    while(logStore.lines.join('\n').length > LOG_MAX_CHARS && logStore.lines.length > 10){
-      logStore.lines = logStore.lines.slice(Math.ceil(logStore.lines.length / 4));
+    var объём = 0, i;
+    for(i = 0; i < logStore.lines.length; i++) объём += logStore.lines[i].length + 1;
+    while(объём > LOG_MAX_CHARS && logStore.lines.length > 10){
+      объём -= logStore.lines[0].length + 1;
+      logStore.lines.shift();
     }
     try{ localStorage.setItem(LOG_KEY, JSON.stringify(logStore)); }catch(e){
       // Хранилище переполнено или недоступно — журнал не повод ломать работу.
@@ -3907,8 +3924,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }catch(e){
       if(!storageBroken){
         storageBroken = true;
-        logEvent('хранилище', 'запись не удалась',
-          { ключ: key, причина: (e && e.name) ? e.name : 'неизвестно' });
+        logEvent('storage', 'write failed',
+          { key: key, reason: (e && e.name) ? e.name : 'unknown' });
         scheduleLogSync();
       }
       return false;
@@ -3964,16 +3981,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      неоткуда. */
   function watchUnhandled(){
     window.addEventListener('error', function(ev){
-      logEvent('сбой', 'необработанная ошибка', {
-        что: ev && ev.message ? String(ev.message).slice(0, 200) : 'неизвестно',
-        строка: (ev && ev.lineno) || 0
+      logEvent('crash', 'uncaught error', {
+        msg: ev && ev.message ? String(ev.message).slice(0, 200) : 'unknown',
+        line: (ev && ev.lineno) || 0
       });
       scheduleLogSync();
     });
     window.addEventListener('unhandledrejection', function(ev){
       var r = ev && ev.reason;
-      logEvent('сбой', 'необработанный отказ', {
-        что: r ? String(r.message || r.kind || r).slice(0, 200) : 'неизвестно'
+      logEvent('crash', 'unhandled rejection', {
+        msg: r ? String(r.message || r.kind || r).slice(0, 200) : 'unknown'
       });
       scheduleLogSync();
     });
@@ -4100,13 +4117,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var s = JSON.parse(raw);
       // Запись без токена или репозитория бесполезна: она осталась бы от
       // прежнего формата и только мешала бы войти заново.
-      if(!(s && s.token && s.repo)) logEvent('вход', 'запись сессии негодна');
+      if(!(s && s.token && s.repo)) logEvent('auth', 'session invalid');
       return (s && s.token && s.repo) ? s : null;
     }catch(e){
       // Сессия была, но не прочиталась — человека попросят войти заново, и
       // без записи это выглядело бы как самопроизвольный выход.
-      if(raw) logEvent('вход', 'сессия не прочиталась',
-        { причина: (e && e.name) ? e.name : 'неизвестно' });
+      if(raw) logEvent('auth', 'session unreadable',
+        { reason: (e && e.name) ? e.name : 'unknown' });
       return null;
     }
   }
@@ -4160,12 +4177,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return fetch(AUTH_FILE, { cache:'no-store' })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(file){
-        if(!file) logEvent('вход', 'список записей не получен');
+        if(!file) logEvent('auth', 'users file unavailable');
         authFile = file;
         return file;
       })
       .catch(function(){
-        logEvent('вход', 'список записей не получен', 'сеть');
+        logEvent('auth', 'users file unavailable', 'network');
         return null;
       });
   }
@@ -4220,14 +4237,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         // Одна формулировка на все случаи. Разделять «такого нет» и «пароль
         // не тот» и нечем, и незачем: подсказка о том, что запись существует,
         // помогла бы только перебору.
-        logEvent('вход', 'пароль не подошёл');
+        logEvent('auth', 'wrong password');
       scheduleLogSync();
         el.lockError.textContent = 'Пароль не подошёл.';
         el.lockInput.select();
         return;
       }
       session = rec;
-      logEvent('вход', 'вошёл');
+      logEvent('auth', 'signed in');
       // Журнал уезжает сразу же, а не со следующего запуска. До этой минуты
       // отправить его было некуда: человек мог работать вовсе без входа —
       // разбирать выгрузки, ловить отказы, — и всё это накопилось локально.
@@ -4253,7 +4270,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function logout(){
-    logEvent('вход', 'вышел');
+    logEvent('auth', 'signed out');
     session = null;
     try{ localStorage.removeItem(STORAGE_SESSION); }catch(e){}
     el.logoutBtn.style.display = 'none';
@@ -4673,7 +4690,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function saveScheduleQuietly(){
     if(!syncAvailable()){
       saveSyncState({ lastResult: { ok: false, kind: 'нет входа', at: new Date().toISOString() } });
-      logEvent('копия', 'не пробовали', 'вход не выполнен');
+      logEvent('snapshot', 'skipped', 'not signed in');
       return;
     }
     if(!events.length) return;
@@ -4685,12 +4702,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       saveSyncState({ lastResult: { ok: true, name: r.name, replaced: r.replaced,
                                     at: new Date().toISOString() } });
       // Имя копии — это только период, персональных данных в нём нет.
-      logEvent('копия', 'сохранена', { файл: r.name, занятий: r.count,
-                                       убрано: r.replaced, предупреждения: r.warn,
-                                       мс: Date.now() - начато });
+      logEvent('snapshot', 'saved', { file: r.name, lessons: r.count,
+                                      removed: r.replaced, warn: r.warn,
+                                      ms: Date.now() - начато });
     }, function(err){
       saveSyncState({ lastResult: { ok: false, kind: err.kind, at: new Date().toISOString() } });
-      logEvent('копия', 'не сохранилась', { причина: err.kind, мс: Date.now() - начато });
+      logEvent('snapshot', 'save failed', { reason: err.kind, ms: Date.now() - начато });
       scheduleLogSync();
       // auth и notFound повторять бессмысленно — они сами не пройдут, и
       // отметка о недосланной копии только вводила бы в заблуждение.
@@ -4715,10 +4732,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // Заметки читаются раньше, чем журнал готов принимать записи, поэтому их
     // итог откладывался до этой точки.
     if(notesReadNote){
-      logEvent('заметки', notesReadNote.код, notesReadNote.подробность);
+      logEvent('notes', notesReadNote.code, notesReadNote.detail);
       scheduleLogSync();
     }
-    if(notesMigrated) logEvent('заметки', 'перенесены со старого формата', { заметок: notesMigrated });
+    if(notesMigrated) logEvent('notes', 'migrated from v1', { notes: notesMigrated });
     collectDom();
     bindStaticEvents();
     // Drop data cached by the previous export format so it doesn't sit in the
@@ -4745,9 +4762,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // Число заметок здесь не для красоты: падение с десятка до нуля между
     // двумя запусками — это Safari, стерший данные сайта за неделю простоя.
     // Без счётчика оно неотличимо от «человек сам удалил».
-    logEvent('запуск', 'открыто', { занятий: events.length,
-      заметок: Object.keys(notes).length,
-      синхронизация: syncAvailable() ? 'есть' : 'нет' });
+    logEvent('start', 'opened', { lessons: events.length,
+      notes: Object.keys(notes).length,
+      sync: syncAvailable() ? 'yes' : 'no' });
     logEnvironment();
     // Копия, не уехавшая в прошлый раз из-за отсутствия сети, досылается
     // здесь — после того, как расписание уже на экране. Тихо: человек не
