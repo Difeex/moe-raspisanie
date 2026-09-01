@@ -135,6 +135,28 @@
     --shadow-lg:0 20px 50px rgba(31,41,55,0.10);
     --shadow-md:0 10px 26px rgba(31,41,55,0.08);
     --shadow-sm:0 4px 12px rgba(31,41,55,0.06);
+    /* Заметка к дню. Цвет один на два места — уголок в ячейке календаря и блок
+       заметки в панели, — поэтому все четыре величины выведены из одного тона
+       и лежат рядом: разойтись им негде.
+       Тон тёплый и двухцветный, переходом по диагонали; тот же приём, что у
+       тени под знаком приложения. Тёплый цвет выбран потому, что заметка не
+       относится ни к одному виду занятий, а холодные тона уже заняты: синий —
+       лекция, зелёный — семинар, тёмно-синий — «выбрано».
+       Фон и рамка сделаны по устройству плашки праздника — единственного
+       другого цветного блока в панели: заливка ~16%, рамка ~34%. Иначе два
+       соседних блока выглядели бы из разных наборов.
+       А вот подпись цветной НЕ делается, и это отличие от плашки праздника
+       намеренное. Затемнённый вариант тона (#8A5E12) сначала стоял и оказался
+       блеклым: он и тёплый фон близки по яркости, а глаз ловит именно её —
+       та же история, что с числом сегодняшнего дня, где приглушение
+       насыщенностью было невидимым, а яркостью — сразу заметным. Поэтому текст
+       заметки набран основным --text, а цвет несут фон, рамка и значок.
+       --note-strong — тот же тон в полную силу, из середины градиента: нужен
+       там, где цвет не намёк, а сам предмет, — значок и рамка под курсором. */
+    --note-mark:linear-gradient(135deg,#F2C230,#EE8B3C);
+    --note-fill:linear-gradient(135deg,rgba(242,194,48,0.16),rgba(238,139,60,0.16));
+    --note-line:rgba(238,139,60,0.34);
+    --note-strong:#E39A35;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -440,6 +462,12 @@
     justify-content:flex-start;cursor:pointer;position:relative;
     transition:background .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease;
     padding:8px 8px 7px;
+    /* Уголок заметки обрезается по самой ячейке. Своё скругление ему не
+       помогает: радиус плитки 14px съедает почти весь треугольник, и вместо
+       закрашенного угла остаётся серп вдоль края. Содержимому это ничем не
+       грозит — внутри только число и полоски, а подъём и тень при наведении
+       лежат снаружи и не обрезаются. */
+    overflow:hidden;
   }
   /* Deliberately no opacity here — an opacity'd element inside a
      backdrop-filter ancestor can lose its repaint on :hover in Chrome
@@ -514,6 +542,29 @@
   .day-cell.selected .day-dot[data-bucket="seminar"]{background:var(--seminar-on-dark) !important}
   .day-cell.selected .day-dot[data-bucket="exam"]{background:var(--exam-on-dark) !important}
   .day-cell.selected .day-dot[data-bucket="other"]{background:var(--other-on-dark) !important}
+
+  /* Признак «в этом дне есть заметка» — закрашенный уголок в верхнем правом
+     углу. Это единственное свободное место в ячейке: число стоит по центру
+     сверху, полоски занятий прижаты к низу во всю ширину, рамку трогать нельзя
+     — она уже значит «в этот день есть занятия».
+     Как и рамка, уголок от фильтров не зависит: заметка либо написана, либо нет.
+
+     Размер фиксированный — 18px, и это единственное отличие от толщины полосок
+     и кегля чисел, которые тянутся за шириной календаря через cqw. Причина в
+     том, что уголок упирается в величину, которая не масштабируется: скругление
+     плитки всегда 14px. Всё, что меньше примерно полутора радиусов, обрезается
+     почти целиком, и вместо закрашенного угла остаётся серп вдоль края.
+     Пробовали clamp(14px,4.5cqw,18px): на десктопе он давал ровно 18px, но на
+     360px ужимал уголок до 14.9px при том же радиусе 14px — ровно в тот серп.
+     Поэтому 18px держатся на всех ширинах; на 360px ячейка худеет с 47 до 37px,
+     и уголок занимает там большую долю плитки — это принято сознательно, потому
+     что альтернатива не «мельче», а «неразличимо». */
+  .day-cell.has-note::after{
+    content:"";position:absolute;top:0;right:0;
+    width:18px;height:18px;
+    background:var(--note-mark);
+    clip-path:polygon(0 0, 100% 0, 100% 100%);
+  }
 
   /* Phone-only: on a narrow screen the calendar and the filter chips live on
      separate tabs, so dimmed strips are the only hint that anything is filtered.
@@ -881,6 +932,94 @@
      Clicking it clears the date, exactly like the other selected chips. */
   .date-chip{background:var(--mode);align-self:flex-start}
 
+  /* ---------- Заметка к дню ----------
+     Лежит над чертой, сразу под чипом даты: заметку пишут про выбранный день, и
+     стоять она должна там же, где сказано, какой это день.
+     Три состояния одного места: приглашение, написанная заметка, правка.
+     Поля у всех трёх одинаковые, чтобы при переходе блок не прыгал. */
+  .note-block{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:11px 14px;border-radius:var(--radius-lg);
+    background:var(--surface-soft);border:1px solid var(--border-soft);
+    font-size:13.5px;line-height:1.45;color:var(--text);
+    text-align:left;width:100%;font-family:inherit;
+    cursor:text;transition:border-color .12s ease, background .12s ease, color .12s ease;
+  }
+  .note-block svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);flex:none;margin-top:1px}
+  .note-body{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}
+  /* Пустое приглашение — пунктиром, тем же приёмом, что зона перетаскивания
+     файла в карточке «расписание ещё не загружено», и тише всего в панели:
+     пока заметки нет, оно не должно спорить с расписанием.
+     Заливки оно не получает — красить нечего, — но пунктир и значок берут цвет
+     заметки: приглашение заранее показывает, какой она станет, если её
+     написать. Подпись при этом --text-muted, тон заголовков дней и «Сбросить»,
+     а не самый светлый --text-faint: с ним приглашение было самым выцветшим
+     пятном на экране. */
+  .note-block.empty{
+    border-style:dashed;border-color:var(--note-line);background:transparent;
+    color:var(--text-muted);
+    font-weight:600;font-size:13px;
+  }
+  .note-block.empty svg{color:var(--note-strong)}
+  /* Подпись темнеет до --text — тот же отклик, что у чипов, «Сегодня» и
+     «Сбросить»: в приложении он один на все нажимаемые элементы. */
+  .note-block.empty:hover{background:var(--surface-soft);color:var(--text)}
+  /* Написанная заметка берёт цвет уголка из календаря — тот же тон в обоих
+     местах, иначе признак и содержание читались бы как разные вещи. */
+  .note-block.filled{
+    background:var(--note-fill);
+    border-color:var(--note-line);
+    color:var(--text);
+  }
+  .note-block.filled svg{color:var(--note-strong);opacity:1}
+  /* Отклик на наведение был нужен в любом случае: блок нажимается и открывает
+     правку, а под курсором не менялся вовсе — прежнее правило перекрашивало
+     рамку в тот же самый цвет. Все прочие нажимаемые элементы в приложении
+     под курсором откликаются, и заметка выглядела из-за этого неживой.
+     Рамка набирает плотность своего же цвета, как у чипов видов работ, а тень
+     берётся цветной, а не общей серой: под цветной рамкой серое пятно читается
+     как грязь — то же правило, что у «Загрузить» и ячейки сегодняшнего дня.
+     Насыщенность 20% — та же, что там. */
+  .note-block.filled:hover{
+    border-color:color-mix(in srgb, var(--note-strong) 62%, transparent);
+    box-shadow:0 4px 12px color-mix(in srgb, var(--note-strong) 20%, transparent);
+  }
+  /* Крестик нужен именно здесь: «Очистить» заметки не трогает (они переживают
+     и очистку, и замену файла), поэтому стереть написанное больше нечем.
+     Появляется при наведении — в покое он отвлекал бы от самого текста. */
+  .note-del{
+    width:24px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;
+    border:none;background:transparent;color:var(--text-faint);cursor:pointer;border-radius:8px;
+    opacity:0;transition:opacity .12s ease, color .12s ease, background .12s ease;
+  }
+  .note-block:hover .note-del,
+  .note-del:focus-visible{opacity:1}
+  .note-del:hover{color:var(--holiday);background:rgba(207,130,136,0.12)}
+  .note-del svg{width:14px;height:14px;margin-top:0;color:currentColor;opacity:1}
+  .note-edit{
+    display:none;flex-direction:column;gap:8px;
+    padding:11px 14px;border-radius:var(--radius-lg);
+    background:var(--surface-strong);border:1px solid var(--accent);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .note-edit.visible{display:flex}
+  .note-edit textarea{
+    width:100%;border:none;outline:none;background:transparent;resize:none;
+    font-family:inherit;font-size:13.5px;line-height:1.45;color:var(--text);
+    min-height:52px;padding:0;
+  }
+  .note-row{display:flex;align-items:center;gap:8px}
+  .note-hint{font-size:11.5px;color:var(--text-faint);margin-right:auto}
+  .note-btn{
+    height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--border-soft);
+    background:var(--surface-strong);color:var(--text-muted);
+    font-size:12.5px;font-weight:600;cursor:pointer;
+    transition:color .12s ease, border-color .12s ease;
+  }
+  .note-btn:hover{color:var(--text);border-color:var(--border-hover)}
+  .note-btn-primary{border-color:var(--today-line);color:var(--accent)}
+  .note-btn-primary:hover{border-color:var(--accent);color:var(--accent)}
+
   /* ---------- Event list ---------- */
   .event-list{display:flex;flex-direction:column;gap:14px;overflow:visible}
   .day-group{display:flex;flex-direction:column;gap:8px}
@@ -949,7 +1088,15 @@
      что-то узкое: сама она выравнивает содержимое по центру. */
   .dropzone{
     width:100%;align-self:stretch;border:2px dashed var(--border-soft);border-radius:var(--radius-lg);
-    padding:22px;font-size:13px;color:var(--text-muted);cursor:pointer;transition:all .15s ease;
+    /* Поля 18px, а не 22px: с появлением заметки правая панель в пустом
+       состоянии перестала укладываться в высоту самого низкого календаря.
+       Предел — 321px, четырёхрядный февраль 2027 (невисокосный год, месяц
+       начинается с понедельника). Худший случай там такой: чип даты, заметка,
+       плашка выбранного праздника и эта карточка разом — выходило 327px, на
+       6px больше календаря. Урезана именно карточка, а не заметка: карточка
+       видна, только пока файл не загружен, а заметка остаётся навсегда.
+       Восемь снятых пикселей дают 319px — 2px запаса. */
+    padding:18px;font-size:13px;color:var(--text-muted);cursor:pointer;transition:all .15s ease;
     /* Две строки идут одна под другой: сначала что нужно, затем как это
        сделать. Отступ между ними меньше строчного интервала внутри самой
        строки, чтобы длинная вторая фраза, перенесённая на узком экране, не
@@ -1324,6 +1471,32 @@
       <button class="chip-btn active date-chip" id="dateChip" style="display:none" title="Снять фильтр по дате">
         <span id="dateChipLabel"></span>
       </button>
+      <!-- Заметка к дню стоит сразу под чипом даты — над чертой, а не под ней.
+           Черта отделяет управление списком от самого списка, а заметка ни к
+           тому, ни к другому не относится: она про выбранный день и потому
+           держится вплотную к его названию.
+           Показывается только при выбранной дате: заметка привязана к дню, и
+           без выбранного дня писать её некуда. При этом от загруженного файла
+           она не зависит — календарь кликабелен и до загрузки, а «в этот день
+           заседание кафедры» осмысленно и в пустой день. -->
+      <button class="note-block empty" id="noteBlock" type="button" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        <span class="note-body" id="noteBody"></span>
+        <span class="note-del" id="noteDelete" role="button" tabindex="0" title="Удалить заметку" aria-label="Удалить заметку">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </span>
+      </button>
+      <div class="note-edit" id="noteEdit">
+        <!-- 1000 знаков — с большим запасом на любую разумную заметку. Это 2 КБ
+             квоты localStorage на день (она считается в UTF-16), то есть даже
+             две сотни расписанных дней укладываются в 400 КБ при типичных 5 МБ. -->
+        <textarea id="noteInput" maxlength="1000" placeholder="Что не забыть в этот день"></textarea>
+        <div class="note-row">
+          <span class="note-hint">Сохраняется само</span>
+          <button class="note-btn" id="noteDeleteEdit" type="button">Удалить</button>
+          <button class="note-btn note-btn-primary" id="noteDone" type="button">Готово</button>
+        </div>
+      </div>
       <!-- Черта отделяет то, чем список управляется (фильтры, чип даты), от
            самого списка и всего, что к нему относится, — плашки праздника,
            карточек, заглушек. -->
@@ -1642,6 +1815,33 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var showHolidays = true;
   try{ showHolidays = localStorage.getItem(SHOW_HOLIDAYS_KEY) !== '0'; }catch(e){}
 
+  // Заметки к дням живут в своём ключе и переживают всё: перезагрузку, замену
+  // файла и очистку данных. Это ручной труд пользователя, а не производная от
+  // выгрузки, — стирать его вместе с расписанием было бы потерей. По той же
+  // причине у заметки есть собственное удаление: крестик и кнопка в правке.
+  // Привязка к дате, а не к занятию: при замене файла занятия меняются, а день
+  // остаётся тем же днём.
+  var NOTES_KEY = 'educal.notes.v1';
+  var notes = {};
+  try{
+    var rawNotes = localStorage.getItem(NOTES_KEY);
+    if(rawNotes){
+      var parsedNotes = JSON.parse(rawNotes);
+      // Хранилище может содержать что угодно — берём только строки под ключами
+      // вида ГГГГ-ММ-ДД, иначе испорченная запись роняла бы отрисовку.
+      if(parsedNotes && typeof parsedNotes === 'object'){
+        Object.keys(parsedNotes).forEach(function(k){
+          if(/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof parsedNotes[k] === 'string' && parsedNotes[k]){
+            notes[k] = parsedNotes[k];
+          }
+        });
+      }
+    }
+  }catch(e){}
+  // Ключ дня, который сейчас правят. null — правки нет.
+  var noteEditingKey = null;
+  var noteSaveTimer = null;
+
   // ---------- dom ----------
   var el = {};
   function collectDom(){
@@ -1653,7 +1853,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','searchInput','resetFilters',
      'calendarFilters','calendarFiltersList',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
-     'dateChip','dateChipLabel','listDivider','listCount','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn'
+     'dateChip','dateChipLabel','listDivider','listCount','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn',
+     'noteBlock','noteBody','noteDelete','noteEdit','noteInput','noteDeleteEdit','noteDone'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
 
@@ -2005,6 +2206,101 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }catch(e){ return null; }
   }
 
+  // ---------- заметки к дням ----------
+  function saveNotes(){
+    try{ localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }catch(e){ /* хранилище недоступно — заметка живёт до перезагрузки */ }
+  }
+
+  // Записывает то, что сейчас в поле правки, и отвечает, изменился ли признак
+  // «в этом дне есть заметка». По этому ответу решается, нужна ли календарю
+  // перерисовка: гонять сетку на каждую набранную букву незачем, уголок
+  // появляется и исчезает только на переходе «есть/нет».
+  function commitNote(){
+    if(noteSaveTimer){ clearTimeout(noteSaveTimer); noteSaveTimer = null; }
+    if(!noteEditingKey) return false;
+    var text = el.noteInput.value.trim();
+    var had = !!notes[noteEditingKey];
+    if(text) notes[noteEditingKey] = text;
+    else delete notes[noteEditingKey];
+    saveNotes();
+    return had !== !!text;
+  }
+
+  function scheduleNoteSave(){
+    if(noteSaveTimer) clearTimeout(noteSaveTimer);
+    // Задержка нужна только чтобы не писать в localStorage на каждое нажатие.
+    // Пропажа последних набранных букв при этом невозможна: выход из правки —
+    // по «Готово», Escape и потере фокуса — сохраняет немедленно.
+    noteSaveTimer = setTimeout(function(){
+      noteSaveTimer = null;
+      if(commitNote()) renderCalendar();
+    }, 400);
+  }
+
+  function startNoteEdit(){
+    if(!filters.date) return;
+    noteEditingKey = filters.date;
+    el.noteInput.value = notes[filters.date] || '';
+    renderNote();
+    el.noteInput.focus();
+    // Курсор в конец: заметку чаще дописывают, чем переписывают.
+    var len = el.noteInput.value.length;
+    try{ el.noteInput.setSelectionRange(len, len); }catch(e){}
+  }
+
+  function finishNoteEdit(){
+    if(!noteEditingKey) return;
+    var flipped = commitNote();
+    noteEditingKey = null;
+    if(flipped) renderCalendar();
+    renderNote();
+  }
+
+  function deleteNote(dateKey){
+    if(!dateKey) return;
+    var had = !!notes[dateKey];
+    delete notes[dateKey];
+    saveNotes();
+    if(noteEditingKey === dateKey){
+      if(noteSaveTimer){ clearTimeout(noteSaveTimer); noteSaveTimer = null; }
+      noteEditingKey = null;
+    }
+    if(had) renderCalendar();
+    renderNote();
+  }
+
+  function renderNote(){
+    // День сменился, пока шла правка, — записываем прежнюю заметку, а не
+    // бросаем её. Перерисовка календаря нужна тому дню, который правили, и
+    // renderCalendar выше по вызову о нём уже не знает.
+    if(noteEditingKey && noteEditingKey !== filters.date){
+      var flipped = commitNote();
+      noteEditingKey = null;
+      if(flipped) renderCalendar();
+    }
+
+    if(!filters.date){
+      el.noteBlock.style.display = 'none';
+      el.noteEdit.classList.remove('visible');
+      return;
+    }
+
+    if(noteEditingKey){
+      el.noteBlock.style.display = 'none';
+      el.noteEdit.classList.add('visible');
+      return;
+    }
+
+    el.noteEdit.classList.remove('visible');
+    var text = notes[filters.date] || '';
+    el.noteBlock.style.display = 'flex';
+    el.noteBlock.classList.toggle('filled', !!text);
+    el.noteBlock.classList.toggle('empty', !text);
+    el.noteBody.textContent = text || 'Заметка к этому дню';
+    el.noteDelete.style.display = text ? 'flex' : 'none';
+    el.noteBlock.title = text ? 'Изменить заметку' : 'Добавить заметку к этому дню';
+  }
+
   // ---------- filtering ----------
   function passesNonDateFilters(e){
     if(filters.workTypes.size && !filters.workTypes.has(e.workTypeBucket)) return false;
@@ -2278,6 +2574,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(!dayData || !dayData.matching) cell.classList.add('no-events');
       if(dateKey===todayKey) cell.classList.add('is-today');
       if(filters.date===dateKey) cell.classList.add('selected');
+      // Уголок заметки — как и рамка, признак самого дня, а не результата
+      // отбора: заметка либо написана, либо нет, фильтры на это не влияют.
+      if(notes[dateKey]) cell.classList.add('has-note');
 
       // The strip earns its place only on a working weekday that turns out to
       // be non-working. On a Saturday or Sunday it would state the obvious,
@@ -2704,6 +3003,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function renderAll(){
     renderCalendar();
     renderList();
+    renderNote();
     renderStreamFilters();
     updateFilterBarActiveStates();
     updateListDivider();
@@ -2948,6 +3248,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     events = [];
     meta = null;
     filters = { workTypes:new Set(), modes:new Set(), streams:new Set(), search:'', date:null };
+    // Заметки здесь намеренно не трогаются — как и настройка показа праздников.
+    // «Очистить» убирает загруженное расписание, а заметки написаны руками и к
+    // выгрузке отношения не имеют; для них есть своё удаление, у каждой отдельно.
     try{ localStorage.removeItem(STORAGE_EVENTS); localStorage.removeItem(STORAGE_META); }catch(e){}
     showNoData();
     renderShell();
@@ -2977,6 +3280,47 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
     el.loadNoticeClose.addEventListener('click', hideLoadNotice);
     el.uploadErrorClose.addEventListener('click', hideUploadError);
+
+    // ---- заметка к дню ----
+    // Клик по блоку открывает правку. Крестик лежит внутри него, поэтому свой
+    // клик останавливает: иначе удаление тут же открывало бы пустую правку.
+    el.noteBlock.addEventListener('click', function(e){
+      if(el.noteDelete.contains(e.target)) return;
+      startNoteEdit();
+    });
+    el.noteDelete.addEventListener('click', function(e){
+      e.stopPropagation();
+      deleteNote(filters.date);
+    });
+    el.noteDelete.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault(); e.stopPropagation();
+        deleteNote(filters.date);
+      }
+    });
+    el.noteInput.addEventListener('input', scheduleNoteSave);
+    // Уход фокуса — тоже конец правки: заметку пишут между делом, и требовать
+    // нажатия «Готово» значило бы терять её при первом же клике мимо.
+    el.noteInput.addEventListener('blur', finishNoteEdit);
+    el.noteInput.addEventListener('keydown', function(e){
+      // Enter оставлен переводом строки — заметка бывает в несколько пунктов.
+      if(e.key === 'Escape'){ e.preventDefault(); finishNoteEdit(); }
+      else if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); finishNoteEdit(); }
+    });
+    // Кнопки правки перехватывают mousedown и не дают полю потерять фокус:
+    // иначе blur успевал закрыть правку раньше, чем случался клик, и кнопка
+    // нажималась уже по исчезнувшему блоку.
+    [el.noteDone, el.noteDeleteEdit].forEach(function(btn){
+      btn.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    });
+    el.noteDone.addEventListener('click', finishNoteEdit);
+    el.noteDeleteEdit.addEventListener('click', function(){
+      var key = noteEditingKey;
+      // Поле чистится до удаления: иначе отложенное сохранение успело бы
+      // записать прежний текст обратно.
+      el.noteInput.value = '';
+      deleteNote(key);
+    });
     // Открывать выбор файла отсюда не нужно и вредно: зона — это <label for>,
     // и клик по ней активирует поле сам. Дублирующий вызов click() ставил в
     // очередь второй запрос, браузер придерживал его, пока открыт первый
