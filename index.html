@@ -3574,83 +3574,130 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      именно такой, а не наоборот: журнал, который пишется сразу в хранилище,
      отказывает ровно тогда, когда он нужен, — сломалась синхронизация, значит
      и записать некуда. Локальный буфер переживает и отсутствие сети, и
-     отозванный токен, и перезагрузку.
+     отозванный токен, и работу вовсе без входа.
+
+     Хранится он строками, и в хранилище уезжает текстом, а не JSON. Читает
+     журнал человек — в переписке или на странице репозитория, — и всё, ради
+     чего берут JSON, здесь никому не нужно: разбирать его некому, интерфейс
+     журнал не показывает. Зато строки читаются глазами, вставляются в
+     переписку как есть и не тратят четверть объёма на повторяющиеся имена
+     полей.
 
      ЧЕГО ЗДЕСЬ НЕ ДОЛЖНО БЫТЬ НИКОГДА: токенов, паролей, текста заметок, ФИО,
-     групп, аудиторий, названий дисциплин. Только коды, счётчики и время.
-     Причина не в законе о данных, а в том, что журнал пересылают в переписку:
-     он обязан быть таким, чтобы его можно было цитировать не глядя. Один раз
-     токен уже утёк именно так — при обычной проверке содержимого хранилища.
+     групп, аудиторий, названий дисциплин, имён загружаемых файлов. Только
+     коды, счётчики и время. Причина не в законе о данных, а в том, что журнал
+     пересылают в переписку: он обязан быть таким, чтобы его можно было
+     цитировать не глядя. Один токен за эту работу уже утёк именно так.
 
      Даты заметок — исключение, они остаются. Без них «стёртая заметка
      воскресла» неотличимо от «заметка не сохранилась», а сама дата ничего о
      человеке не сообщает. */
 
   var LOG_KEY = 'educal.log.v1';
+  var LOG_FILE = 'log.txt';
   var LOG_MAX = 300;
   var LOG_MAX_CHARS = 48000;
 
-  var logBuffer = (function(){
+  // seq — сквозной номер записи, lines — готовые строки. Номер хранится
+  // отдельно, а не вычитывается из последней строки: кольцо вытесняет старые
+  // записи, и после вытеснения по строкам его было бы не восстановить.
+  var logStore = (function(){
     try{
       var raw = localStorage.getItem(LOG_KEY);
-      var arr = raw ? JSON.parse(raw) : null;
-      return Array.isArray(arr) ? arr : [];
-    }catch(e){ return []; }
+      var v = raw ? JSON.parse(raw) : null;
+      if(v && typeof v === 'object' && Array.isArray(v.lines)){
+        return { seq: v.seq || 0, lines: v.lines };
+      }
+    }catch(e){}
+    return { seq: 0, lines: [] };
   })();
 
-  /* Сквозной счётчик записей. Признаком «появилось новое» он служит вместо
-     времени, и это не придирка: две записи попадают в одну миллисекунду
-     сплошь и рядом — разбор выгрузки и следующая за ним попытка копии
-     оказываются с одинаковой отметкой. По времени журнал тогда считался бы
-     неизменившимся и не уезжал бы. */
-  var logSeq = logBuffer.length ? (logBuffer[logBuffer.length - 1].n || 0) : 0;
+  /* Время местное, со смещением, а не UTC. Это ровно тот случай, когда важно
+     сойтись с рассказом человека: «у меня днём не сработало» надо уметь
+     сопоставить со строкой журнала, не пересчитывая часовые пояса в уме. */
+  function logStamp(){
+    var d = new Date();
+    var p = function(n){ return (n < 10 ? '0' : '') + n; };
+    var off = -d.getTimezoneOffset();
+    var sign = off < 0 ? '-' : '+';
+    off = Math.abs(off);
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+           p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' ' +
+           sign + p(Math.floor(off / 60)) + ':' + p(off % 60);
+  }
 
-  // Ключи короткие: n — номер, t — время, a — область, c — код события,
-  // d — подробность. Журнал лежит в том же хранилище, что и расписание, и
-  // растолстеть ему там не на чем.
+  function logDetail(d){
+    if(d === undefined || d === null) return '';
+    if(typeof d !== 'object'){ return String(d); }
+    return Object.keys(d).map(function(k){ return k + '=' + d[k]; }).join(' ');
+  }
+
   function logEvent(area, code, detail){
-    var rec = { n: ++logSeq, t: new Date().toISOString(), a: area, c: code };
-    if(detail !== undefined && detail !== null) rec.d = detail;
-    logBuffer.push(rec);
+    var хвост = logDetail(detail);
+    var строка = logStamp() + '  #' + (++logStore.seq) + '  ' + area + ' · ' + code +
+                 (хвост ? ' · ' + хвост : '');
+    // Переводы строк схлопываются: одна запись — одна строка, иначе журнал
+    // перестанет читаться и построчно, и целиком.
+    logStore.lines.push(строка.replace(/\s*[\r\n]+\s*/g, ' '));
+
     // Кольцо: старое вытесняется. Ограничение двойное — по числу записей и по
     // объёму, потому что одна запись бывает заметно длиннее прочих.
-    if(logBuffer.length > LOG_MAX) logBuffer = logBuffer.slice(-LOG_MAX);
-    var text = JSON.stringify(logBuffer);
-    while(text.length > LOG_MAX_CHARS && logBuffer.length > 10){
-      logBuffer = logBuffer.slice(Math.ceil(logBuffer.length / 4));
-      text = JSON.stringify(logBuffer);
+    if(logStore.lines.length > LOG_MAX) logStore.lines = logStore.lines.slice(-LOG_MAX);
+    while(logStore.lines.join('\n').length > LOG_MAX_CHARS && logStore.lines.length > 10){
+      logStore.lines = logStore.lines.slice(Math.ceil(logStore.lines.length / 4));
     }
-    try{ localStorage.setItem(LOG_KEY, text); }catch(e){
+    try{ localStorage.setItem(LOG_KEY, JSON.stringify(logStore)); }catch(e){
       // Хранилище переполнено или недоступно — журнал не повод ломать работу.
     }
   }
 
-  /* Отправка журнала в приватное хранилище — раз за запуск и только если
-     появилось новое.
+  function logText(){
+    return logStore.lines.length ? logStore.lines.join('\n') + '\n' : '';
+  }
+
+  /* Отправка журнала в приватное хранилище.
+
+     Зовётся при запуске и сразу после входа. Второе важнее первого: человек
+     мог работать вовсе без входа — разбирать выгрузки, писать заметки, ловить
+     отказы, — и весь этот журнал должен уехать при первой же появившейся
+     возможности, а не со следующего открытия приложения.
 
      Файл перезаписывается целиком, а не дописывается. Дозапись означала бы
      обращение к хранилищу на каждое событие, то есть десятки коммитов в день
-     в том самом репозитории, историю которого мы используем для восстановления
-     заметок. А история журнала при перезаписи всё равно сохраняется — её
-     ведёт git.
+     в том самом репозитории, историю которого мы используем для
+     восстановления заметок. История журнала при перезаписи всё равно
+     сохраняется — её ведёт git.
 
      Отправка журнала сама в журнал не пишется: запись о записи росла бы
-     бесконечно и вытеснила бы всё остальное. */
+     бесконечно и вытеснила бы всё остальное.
+
+     И главное: эта функция не отказывает никогда. Её зовут из входа, и
+     несостоявшийся журнал не имеет права помешать человеку войти. */
+  var logSending = false;
+
   function syncLog(){
-    if(!syncAvailable() || !logBuffer.length) return Promise.resolve(null);
-    var последняя = logBuffer[logBuffer.length - 1].n;
-    if(syncState().logSentAt === последняя) return Promise.resolve(null);
-    var text = JSON.stringify(logBuffer, null, 1);
-    return updateFile('log.json', 'Журнал приложения', function(current){
-      return current === text ? null : text;
-    }).then(function(){
-      saveSyncState({ logSentAt: последняя });
-      return true;
-    }, function(){
-      // Не отправился — не беда и не повод сообщать: попробуем при следующем
-      // запуске, а сам журнал никуда не делся.
-      return null;
-    });
+    try{
+      if(logSending || !syncAvailable() || !logStore.lines.length) return Promise.resolve(null);
+      if(syncState().logSentAt === logStore.seq) return Promise.resolve(null);
+      var text = logText();
+      var номер = logStore.seq;
+      logSending = true;
+      return updateFile(LOG_FILE, 'Журнал приложения', function(current){
+        return current === text ? null : text;
+      }).then(function(){
+        logSending = false;
+        saveSyncState({ logSentAt: номер });
+        return true;
+      }, function(){
+        // Не отправился — не беда и не повод сообщать: попробуем при следующем
+        // запуске, а сам журнал никуда не делся.
+        logSending = false;
+        return null;
+      });
+    }catch(e){
+      logSending = false;
+      return Promise.resolve(null);
+    }
   }
 
   // ---------- вход по паролю ----------
@@ -3853,6 +3900,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
       session = rec;
       logEvent('вход', 'вошёл');
+      // Журнал уезжает сразу же, а не со следующего запуска. До этой минуты
+      // отправить его было некуда: человек мог работать вовсе без входа —
+      // разбирать выгрузки, ловить отказы, — и всё это накопилось локально.
+      // Отказ здесь ничего не ломает: syncLog не отказывает никогда.
+      syncLog();
       // Вход держится до кнопки «Выйти»: пароль машинный и длинный, набирать
       // его при каждом запуске приложения, которое открывают по нескольку раз
       // в день, невозможно. Расшифрованная запись лежит в localStorage рядом
