@@ -4691,6 +4691,118 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }, function(){ return 0; });
   }
 
+  /* ---------- копии: список, чтение, восстановление, удаление ----------
+
+     Отсюда пользуется интерфейс. Он вызывает эти функции и показывает то, что
+     они вернули; к GitHub он не обращается никогда.
+
+     Общая беда всех четырёх — устаревший список. Человек открыл копии на
+     компьютере, потом с телефона одну удалил, вернулся к компьютеру и жмёт по
+     ней. Отвечать на это падением нельзя, и списывать на «непонятную ошибку»
+     тоже: случай обычный, и говорить о нём надо прямо. Для него заведён свой
+     вид ошибки — gone. */
+
+  // Список копий строится из имён файлов: период и пометка предупреждений
+  // видны прямо оттуда, и вычитывать содержимое ради списка не нужно. Чужие
+  // файлы, если кто-то положит их в тот же каталог, отбрасываются.
+  function syncListSnapshots(){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    return listDir(SNAPSHOT_DIR).then(function(items){
+      var out = [];
+      items.forEach(function(it){
+        if(it.type && it.type !== 'file') return;
+        var p = parseSnapshotName(it.name);
+        if(p) out.push({ name: it.name, period: p.period, warn: p.warn, size: it.size || 0 });
+      });
+      // Новые первыми: копии опознают по семестру, и текущий нужен чаще
+      // прошлогоднего.
+      out.sort(function(a, b){ return a.period.from < b.period.from ? 1 : -1; });
+      return out;
+    });
+  }
+
+  // Чтение одной копии целиком — для подробностей раскрытой строки и для
+  // восстановления. Исчезнувший файл здесь именно ошибка, а не пустота: его
+  // попросили по имени из списка, значит список устарел.
+  function syncReadSnapshot(name){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    if(!parseSnapshotName(name)) return Promise.reject(syncError('gone'));
+    return readFile(SNAPSHOT_DIR + '/' + name).then(function(file){
+      if(!file) throw syncError('gone');
+      var snap;
+      try{ snap = JSON.parse(file.text); }catch(e){ throw syncError('unknown'); }
+      if(!snap || !Array.isArray(snap.events)) throw syncError('unknown');
+      return snap;
+    });
+  }
+
+  /* Восстановление. Копия становится текущим расписанием целиком.
+
+     Новой копии при этом не создаётся, и отметка о недосланной снимается.
+     Иначе после восстановления прошлого семестра досылка сохранила бы его как
+     «текущее расписание» — то есть перезаписала бы им же самого себя, а живая
+     копия текущего семестра осталась бы без хозяина.
+
+     Заметки не трогаются: они привязаны к дням, а не к выгрузке, и своё
+     слияние у них отдельное. */
+  function syncRestoreSnapshot(name){
+    return syncReadSnapshot(name).then(function(snap){
+      events = reviveEvents(snap.events);
+      meta = snap.meta || null;
+      // Фильтры сбрасываются по той же причине, что и при загрузке файла: в
+      // поднятом семестре другие потоки и виды занятий, и уцелевший фильтр
+      // молча спрятал бы всё.
+      filters = { workTypes:new Set(), modes:new Set(), streams:new Set(), search:'', date:null };
+      if(el.searchInput) el.searchInput.value = '';
+      saveToStorage(events, meta);
+      saveSyncState({ pendingSnapshot: null });
+      afterDataLoaded();
+      logEvent('snapshot', 'restored', { file: name, lessons: events.length });
+      scheduleLogSync();
+      return { count: events.length };
+    });
+  }
+
+  /* Удаление копии.
+
+     sha читается здесь, а не принимается от интерфейса: список у него мог
+     устареть, и присланный оттуда sha давал бы отказ на ровном месте. Цена —
+     один лишний запрос, и она того стоит.
+
+     Копия, которой уже нет, считается удалённой успешно. Человек просил, чтобы
+     её не было; её нет. Сообщать об ошибке не о чем. */
+  function syncDeleteSnapshot(name){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    if(!parseSnapshotName(name)) return Promise.reject(syncError('gone'));
+    var path = SNAPSHOT_DIR + '/' + name;
+    return readFile(path).then(function(file){
+      if(!file){
+        logEvent('snapshot', 'delete skipped', { file: name, reason: 'already gone' });
+        return { name: name };
+      }
+      return deleteFile(path, file.sha, 'Копия удалена по просьбе владельца')
+        .then(function(){
+          logEvent('snapshot', 'deleted', { file: name });
+          scheduleLogSync();
+          return { name: name };
+        }, function(err){
+          // Столкновение: копию успели переписать с другого устройства между
+          // нашим чтением и удалением. Перечитываем свежий sha и повторяем —
+          // просили удалить копию за период, а не конкретную её версию.
+          if(err.kind !== 'conflict') throw err;
+          return readFile(path).then(function(again){
+            if(!again) return { name: name };
+            return deleteFile(path, again.sha, 'Копия удалена по просьбе владельца')
+              .then(function(){
+                logEvent('snapshot', 'deleted', { file: name, retried: true });
+                scheduleLogSync();
+                return { name: name };
+              });
+          });
+        });
+    });
+  }
+
   /* Копия, которая не доехала.
 
      Расписание уже загружено и работает, а сети не было. Молчать нельзя:
