@@ -4816,47 +4816,77 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return { notes: merged, added: added, updated: updated, deleted: deleted };
   }
 
-  /* Слияние в обе стороны за один заход.
+  /* ДВА ПУТИ, И ОНИ НЕ СИММЕТРИЧНЫ.
 
-     Чтение, слияние и запись идут через updateFile, потому что столкновение
-     здесь настоящее: два устройства пишут в один файл. Не совпал sha — значит
-     между нашим чтением и записью кто-то успел записать своё, и слияние надо
-     повторить поверх свежего. Повторный проход безопасен: слияние по времени
-     идемпотентно, и уже слитое состояние сливается с новым без потерь.
+     Источник данных — приложение на устройстве, и локальным данным верить.
+     Отсюда правило, определяющее здесь всё: наверх, в хранилище, записывается
+     само; вниз, в приложение, — только по кнопке.
 
-     Локально изменения применяются всегда, даже если запись не понадобилась:
-     то, что приехало с другого устройства, человек должен увидеть. */
-  function syncNotes(opts){
+     Значит стёртая заметка стёрта. Приложение не станет молча возвращать её с
+     другого устройства, потому что «там она ещё есть»: человек её удалил, и
+     решать за него, что это была ошибка, нельзя.
+
+     И значит два устройства могут держать разные заметки сколько угодно
+     долго. Это не рассогласование, которое надо чинить, а его право. Захочет
+     свести — нажмёт.
+
+     ---- путь наверх: запись, локальное состояние не трогается ----
+
+     Слияние здесь всё равно нужно, но не ради человека, а ради файла: он
+     общий, и запись «своим состоянием поверх» стёрла бы в нём заметки, которые
+     туда положило другое устройство. Поэтому в файл кладётся объединение, а
+     приложение остаётся при своём. */
+  function syncPushNotes(opts){
     if(!syncAvailable()) return Promise.reject(syncError('auth'));
-    var итог = null;
     return updateFile(NOTES_FILE, 'Заметки к дням', function(current){
       var remote = {};
       if(current){
         try{ remote = validNotes(JSON.parse(current)); }
         catch(e){ /* нечитаемое содержимое замещается нашим */ }
       }
-      var m = mergeNotes(notes, remote);
-      итог = m;
-      notes = m.notes;
-      saveNotesQuietly();
-      var text = JSON.stringify(m.notes, null, 1);
+      var text = JSON.stringify(mergeNotes(notes, remote).notes, null, 1);
       // Совпало — не пишем вовсе. Без этого каждое открытие приложения давало
       // бы коммит в чужом хранилище на ровном месте.
       return current === text ? null : text;
     }, opts).then(function(res){
       if(res && res.sha) saveSyncState({ notesSha: res.sha });
       notesDirtySince = 0;
-      if(итог && (итог.added || итог.updated || итог.deleted)){
-        logEvent('notes', 'merged', { added: итог.added, updated: итог.updated,
-                                      deleted: итог.deleted });
-        renderCalendar();
-        renderNote();
-      }
       saveSyncState({ lastSyncAt: new Date().toISOString() });
+      return true;
+    });
+  }
+
+  /* ---- путь вниз: только по явному действию человека ----
+
+     Это та самая кнопка «свести заметки». Здесь, и только здесь, заметки из
+     хранилища попадают в приложение.
+
+     Слияние то же самое, по отметке времени: заметка, написанная позже,
+     побеждает; надгробие тоже побеждает, если оно новее, — стёртое на телефоне
+     не воскресает на компьютере. После слияния объединённое состояние уезжает
+     обратно, чтобы файл и приложение сошлись. */
+  function syncPullNotes(){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    return readFile(NOTES_FILE).then(function(file){
+      var remote = {};
+      if(file){
+        try{ remote = validNotes(JSON.parse(file.text)); }
+        catch(e){ throw syncError('unknown'); }
+      }
+      var m = mergeNotes(notes, remote);
+      notes = m.notes;
+      saveNotesQuietly();
+      renderCalendar();
+      renderNote();
+      logEvent('notes', 'pulled', { added: m.added, updated: m.updated, deleted: m.deleted });
+      scheduleLogSync();
       // Наружу уходят только счётчики: сами заметки интерфейс читает из
       // приложения, и отдавать ему тот же объект вторым путём незачем.
-      return итог ? { added: итог.added, updated: итог.updated, deleted: итог.deleted }
-                  : { added: 0, updated: 0, deleted: 0 };
+      return syncPushNotes().then(function(){
+        return { added: m.added, updated: m.updated, deleted: m.deleted };
+      }, function(){
+        return { added: m.added, updated: m.updated, deleted: m.deleted };
+      });
     });
   }
 
@@ -4881,8 +4911,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function flushNotes(){
     if(notesSyncTimer){ clearTimeout(notesSyncTimer); notesSyncTimer = null; }
-    syncNotes().catch(function(err){
-      logEvent('notes', 'sync failed', err.kind);
+    syncPushNotes().catch(function(err){
+      logEvent('notes', 'push failed', err.kind);
       scheduleLogSync();
     });
   }
@@ -4920,7 +4950,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     logEvent('notes', 'cleared', { cleared: погашено });
     scheduleLogSync();
     if(!syncAvailable()) return Promise.resolve({ cleared: погашено });
-    return syncNotes().then(function(){ return { cleared: погашено }; });
+    return syncPushNotes().then(function(){ return { cleared: погашено }; });
   }
 
   /* Восстановить последнюю живую версию заметок из истории хранилища.
@@ -4968,11 +4998,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
            самую позднюю отметку из всех виденных и ставим на миллисекунду
            позже неё. Тогда возвращённые заметки выигрывают у чего угодно, при
            любых часах. */
-        return syncNotes().catch(function(){ return null; }).then(function(){
+        // Хранилище читается ради одной величины — самой поздней отметки, —
+        // а не чтобы влить его в приложение. Восстановление возвращает
+        // потерянное, а не сводит два устройства; сведение это отдельная
+        // кнопка, и нажимает её человек.
+        return readFile(NOTES_FILE).catch(function(){ return null; }).then(function(file){
+          var чужие = {};
+          if(file){ try{ чужие = validNotes(JSON.parse(file.text)); }catch(e){} }
           var сейчас = new Date().toISOString();
           var поздняя = сейчас;
           Object.keys(notes).forEach(function(k){
             var t = notes[k] && notes[k].updatedAt;
+            if(t && t > поздняя) поздняя = t;
+          });
+          Object.keys(чужие).forEach(function(k){
+            var t = чужие[k] && чужие[k].updatedAt;
             if(t && t > поздняя) поздняя = t;
           });
           var отметка = сейчас;
@@ -4991,7 +5031,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           renderNote();
           logEvent('notes', 'restored', { notes: вернулось, from: найдено.sha.slice(0, 7) });
           scheduleLogSync();
-          return syncNotes().then(function(){
+          return syncPushNotes().then(function(){
             return { restored: вернулось, from: найдено.sha.slice(0, 7) };
           });
         });
@@ -5221,11 +5261,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // здесь — после того, как расписание уже на экране. Тихо: человек не
     // просил её сейчас, и запуск приложения задерживать нечем.
     flushPendingSnapshot();
-    // Заметки сливаются при запуске: то, что написали с другого устройства,
-    // человек должен увидеть сразу, а не через минуту тишины.
+    /* При запуске заметки только дописываются в хранилище — ничего оттуда не
+       подтягивается.
+
+       Соблазн «заодно подтянуть свежее» велик, но это ровно то, чего делать
+       нельзя: человек открыл приложение посмотреть свои заметки, а они
+       поменялись сами. Стёртое вчера на телефоне вернулось бы, а сегодняшняя
+       правка на компьютере ушла бы под чужую. Свести заметки он попросит сам,
+       кнопкой. */
     if(syncAvailable()){
-      syncNotes().catch(function(err){
-        logEvent('notes', 'sync failed', err.kind);
+      syncPushNotes().catch(function(err){
+        logEvent('notes', 'push failed', err.kind);
         scheduleLogSync();
       });
     }
