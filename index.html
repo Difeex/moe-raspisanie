@@ -2354,8 +2354,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   // ---------- заметки к дням ----------
-  function saveNotes(){
+  // Тихая запись — без завода отсрочки. Нужна там, где заметки меняет само
+  // слияние: заводить от его результата новое слияние значило бы гонять
+  // хранилище по кругу.
+  function saveNotesQuietly(){
     storageWrite(NOTES_KEY, JSON.stringify(notes));
+  }
+
+  function saveNotes(){
+    saveNotesQuietly();
+    // Единственная точка, через которую проходят все правки заметок, — здесь и
+    // заводится отсрочка слияния.
+    scheduleNotesSync();
   }
 
   // Записывает то, что сейчас в поле правки, и отвечает, изменился ли признак
@@ -3626,6 +3636,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // поле, и по кнопке «Готово» на экранной клавиатуре телефона.
     el.lockForm.addEventListener('submit', submitPassword);
     el.logoutBtn.addEventListener('click', askLogout);
+    /* Уход со страницы. Именно visibilitychange, а не beforeunload: на iOS
+       второй не срабатывает вовсе, а браузер выгружает вкладку молча.
+       Написанное при этом не теряется в любом случае — оно в браузере, — но
+       на второе устройство попало бы только к следующему запуску. */
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState === 'hidden') flushNotesOnHide();
+    });
     document.addEventListener('keydown', function(e){
       if(e.key !== 'Escape') return;
       if(el.confirmOverlay.classList.contains('open')) closeConfirm();
@@ -4546,10 +4563,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   // Запись. sha обязателен, когда файл уже есть, и должен отсутствовать,
   // когда файла нет: GitHub отвергает и то и другое наоборот.
-  function writeFile(path, text, sha, message){
+  function writeFile(path, text, sha, message, opts){
     var body = { message: message, content: toBase64(text) };
     if(sha) body.sha = sha;
-    return apiFetch('PUT', '/contents/' + encodePath(path), body)
+    return apiFetch('PUT', '/contents/' + encodePath(path), body, opts)
       .then(function(r){ return { sha: r.content.sha }; });
   }
 
@@ -4573,7 +4590,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      Три попытки, а не бесконечность: если не разошлось трижды подряд, значит
      на другом устройстве пишут прямо сейчас и непрерывно, и правильнее
      сказать об этом человеку, чем крутиться дальше. */
-  function updateFile(path, message, transform){
+  function updateFile(path, message, transform, opts){
     var tries = 0;
     function attempt(){
       tries++;
@@ -4581,7 +4598,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var next = transform(current ? current.text : null);
         // transform вернул null — менять нечего, ходить в сеть незачем.
         if(next === null || next === undefined) return null;
-        return writeFile(path, next, current ? current.sha : null, message)
+        return writeFile(path, next, current ? current.sha : null, message, opts)
           .catch(function(err){
             if(err.kind === 'conflict' && tries < 3) return attempt();
             throw err;
@@ -4734,6 +4751,251 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         });
       }, Promise.resolve()).then(function(){ return done; });
     }, function(){ return 0; });
+  }
+
+  // ---------- слияние заметок ----------
+  /* Заметки правят на двух устройствах, и сливать их приходится по-настоящему,
+     в отличие от расписаний: те снимки, их достаточно замещать.
+
+     Правило одно на все случаи: по каждому дню берётся запись с бо́льшей
+     отметкой времени. Удаление — такая же правка, просто с пустым текстом, и
+     отдельной ветки в коде не требует. При равенстве отметок берётся дальняя
+     сторона: не потому, что она правее, а чтобы два устройства сошлись к
+     одному состоянию, а не менялись местами при каждом слиянии.
+
+     Записи не удаляются физически никогда. Стёртая на телефоне заметка при
+     физическом удалении вернулась бы с компьютера при первом же слиянии, и так
+     каждый раз.
+
+     Известное ограничение: отметка берётся с часов устройства. Разъехались
+     часы — порядок правок будет неверным. Лечится это только сервером,
+     которого в нашей схеме нет и не будет. */
+
+  var NOTES_FILE = 'notes.json';
+  var NOTES_SYNC_DELAY = 60000;
+  // Если правки копятся дольше этого срока, слияние происходит, не дожидаясь
+  // тишины: человек может писать заметки на неделю вперёд полчаса подряд, и
+  // всё это время второе устройство о них не знало бы.
+  var NOTES_MAX_STALE = 300000;
+
+  function validNotes(raw){
+    var out = {};
+    if(raw && typeof raw === 'object'){
+      Object.keys(raw).forEach(function(k){
+        if(isNoteKey(k) && isNoteValue(raw[k])) out[k] = raw[k];
+      });
+    }
+    return out;
+  }
+
+  function mergeNotes(local, remote){
+    var ключи = {}, k;
+    for(k in local) if(Object.prototype.hasOwnProperty.call(local, k)) ключи[k] = true;
+    for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) ключи[k] = true;
+
+    var merged = {}, added = 0, updated = 0, deleted = 0;
+    Object.keys(ключи).forEach(function(k){
+      var l = local[k], r = remote[k], победа;
+      if(!l) победа = r;
+      else if(!r) победа = l;
+      else {
+        var lt = l.updatedAt || '', rt = r.updatedAt || '';
+        // Отметки — ISO с миллисекундами, поэтому сравниваются как строки:
+        // порядок символов у них совпадает с порядком времени.
+        победа = (rt >= lt) ? r : l;
+      }
+      merged[k] = победа;
+
+      // Счётчики описывают то, что изменилось ЗДЕСЬ: человеку интересно, что
+      // приехало с другого устройства, а не сколько записей в файле.
+      var былТекст = !!(l && l.text), сталТекст = !!победа.text;
+      if(!былТекст && сталТекст) added++;
+      else if(былТекст && !сталТекст) deleted++;
+      else if(былТекст && сталТекст && l.text !== победа.text) updated++;
+    });
+    return { notes: merged, added: added, updated: updated, deleted: deleted };
+  }
+
+  /* Слияние в обе стороны за один заход.
+
+     Чтение, слияние и запись идут через updateFile, потому что столкновение
+     здесь настоящее: два устройства пишут в один файл. Не совпал sha — значит
+     между нашим чтением и записью кто-то успел записать своё, и слияние надо
+     повторить поверх свежего. Повторный проход безопасен: слияние по времени
+     идемпотентно, и уже слитое состояние сливается с новым без потерь.
+
+     Локально изменения применяются всегда, даже если запись не понадобилась:
+     то, что приехало с другого устройства, человек должен увидеть. */
+  function syncNotes(opts){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    var итог = null;
+    return updateFile(NOTES_FILE, 'Заметки к дням', function(current){
+      var remote = {};
+      if(current){
+        try{ remote = validNotes(JSON.parse(current)); }
+        catch(e){ /* нечитаемое содержимое замещается нашим */ }
+      }
+      var m = mergeNotes(notes, remote);
+      итог = m;
+      notes = m.notes;
+      saveNotesQuietly();
+      var text = JSON.stringify(m.notes, null, 1);
+      // Совпало — не пишем вовсе. Без этого каждое открытие приложения давало
+      // бы коммит в чужом хранилище на ровном месте.
+      return current === text ? null : text;
+    }, opts).then(function(res){
+      if(res && res.sha) saveSyncState({ notesSha: res.sha });
+      notesDirtySince = 0;
+      if(итог && (итог.added || итог.updated || итог.deleted)){
+        logEvent('notes', 'merged', { added: итог.added, updated: итог.updated,
+                                      deleted: итог.deleted });
+        renderCalendar();
+        renderNote();
+      }
+      saveSyncState({ lastSyncAt: new Date().toISOString() });
+      // Наружу уходят только счётчики: сами заметки интерфейс читает из
+      // приложения, и отдавать ему тот же объект вторым путём незачем.
+      return итог ? { added: итог.added, updated: итог.updated, deleted: итог.deleted }
+                  : { added: 0, updated: 0, deleted: 0 };
+    });
+  }
+
+  /* Когда сливать.
+
+     Ходить в хранилище на каждую заведённую заметку незачем — их правят по
+     одной и часто. Отсрочка работает наоборот интуиции: чем быстрее человек
+     пишет, тем меньше записей, потому что таймер сбрасывается и все правки
+     уезжают одной. Больше одной записи в минуту от заметок получить нельзя,
+     и это жёсткий потолок, а не надежда на то, что человек не робот. */
+  var notesSyncTimer = null;
+  var notesDirtySince = 0;
+
+  function scheduleNotesSync(){
+    if(!syncAvailable()) return;
+    if(!notesDirtySince) notesDirtySince = Date.now();
+    if(notesSyncTimer) clearTimeout(notesSyncTimer);
+    // Правки копятся слишком долго — отправляем, не дожидаясь тишины.
+    if(Date.now() - notesDirtySince >= NOTES_MAX_STALE){ flushNotes(); return; }
+    notesSyncTimer = setTimeout(flushNotes, NOTES_SYNC_DELAY);
+  }
+
+  function flushNotes(){
+    if(notesSyncTimer){ clearTimeout(notesSyncTimer); notesSyncTimer = null; }
+    syncNotes().catch(function(err){
+      logEvent('notes', 'sync failed', err.kind);
+      scheduleLogSync();
+    });
+  }
+
+  /* Уход со страницы — единственный надёжный момент на телефоне: браузер
+     выгружает вкладку молча, а beforeunload на iOS не срабатывает.
+
+     Полное слияние здесь не успеет: оно требует чтения, а потом записи, и
+     браузер оборвёт цепочку. Поэтому делается одна запись с запомненным sha и
+     keepalive. Не совпал sha — значит на другом устройстве уже писали, наша
+     запись отобьётся, и ничего страшного: настоящее слияние произойдёт при
+     следующем запуске, а заметки всё это время лежат в браузере целыми. */
+  function flushNotesOnHide(){
+    if(!syncAvailable() || !notesDirtySince) return;
+    var sha = syncState().notesSha;
+    if(!sha) return;
+    writeFile(NOTES_FILE, JSON.stringify(notes, null, 1), sha,
+      'Заметки к дням', { keepalive: true }).catch(function(){});
+  }
+
+  /* Удалить все заметки — это не удаление, а простановка надгробий текущим
+     временем. При физическом удалении второе устройство вернуло бы их обратно
+     при первом же слиянии. */
+  function syncClearNotes(){
+    var погашено = 0;
+    Object.keys(notes).forEach(function(k){
+      if(notes[k] && notes[k].text){
+        notes[k] = { text: '', updatedAt: new Date().toISOString() };
+        погашено++;
+      }
+    });
+    saveNotesQuietly();
+    renderCalendar();
+    renderNote();
+    logEvent('notes', 'cleared', { cleared: погашено });
+    scheduleLogSync();
+    if(!syncAvailable()) return Promise.resolve({ cleared: погашено });
+    return syncNotes().then(function(){ return { cleared: погашено }; });
+  }
+
+  /* Восстановить последнюю живую версию заметок из истории хранилища.
+
+     Каждая запись notes.json — коммит, и прежние версии никуда не делись. Ищем
+     самую свежую, где есть хоть одна живая заметка: если человек всё стёр и
+     синхронизировал, верхняя версия состоит из одних надгробий, и возвращать
+     надо предыдущую.
+
+     Тонкость, из-за которой это не «записать старое обратно»: надгробия новее
+     восстанавливаемых записей и победили бы при слиянии. Поэтому вернувшимся
+     заметкам ставится текущее время — тогда они выигрывают и здесь, и на всех
+     остальных устройствах.
+
+     Написанное после той версии не трогается: восстановление возвращает
+     потерянное, а не откатывает всё подряд. */
+  function syncRestoreNotes(){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    return apiFetch('GET', '/commits?path=' + encodeURIComponent(NOTES_FILE) + '&per_page=20')
+      .then(function(список){
+        if(!список || !список.length) throw syncError('gone');
+        var i = 0;
+        function следующий(){
+          if(i >= список.length) throw syncError('gone');
+          var sha = список[i++].sha;
+          return apiFetch('GET', '/contents/' + encodePath(NOTES_FILE) + '?ref=' + sha)
+            .then(function(r){
+              var версия = validNotes(JSON.parse(fromBase64(r.content)));
+              var живые = Object.keys(версия).filter(function(k){ return !!версия[k].text; });
+              return живые.length ? { sha: sha, notes: версия, живые: живые } : следующий();
+            }, function(){ return следующий(); });
+        }
+        return следующий();
+      })
+      .then(function(найдено){
+        /* Сначала слияние, потом простановка отметок — порядок важен.
+
+           Возвращаемая заметка обязана победить надгробие, которым её стёрли.
+           Ставить ей просто текущее время недостаточно: надгробие мог
+           поставить телефон, часы которого убежали вперёд, и тогда оно
+           окажется новее возвращаемой записи — восстановление молча отменит
+           само себя при первом же слиянии.
+
+           Поэтому сперва подтягиваем всё, что есть в хранилище, потом берём
+           самую позднюю отметку из всех виденных и ставим на миллисекунду
+           позже неё. Тогда возвращённые заметки выигрывают у чего угодно, при
+           любых часах. */
+        return syncNotes().catch(function(){ return null; }).then(function(){
+          var сейчас = new Date().toISOString();
+          var поздняя = сейчас;
+          Object.keys(notes).forEach(function(k){
+            var t = notes[k] && notes[k].updatedAt;
+            if(t && t > поздняя) поздняя = t;
+          });
+          var отметка = сейчас;
+          if(поздняя !== сейчас){
+            var мс = Date.parse(поздняя);
+            отметка = isNaN(мс) ? сейчас : new Date(мс + 1).toISOString();
+          }
+
+          var вернулось = 0;
+          найдено.живые.forEach(function(k){
+            notes[k] = { text: найдено.notes[k].text, updatedAt: отметка };
+            вернулось++;
+          });
+          saveNotesQuietly();
+          renderCalendar();
+          renderNote();
+          logEvent('notes', 'restored', { notes: вернулось, from: найдено.sha.slice(0, 7) });
+          scheduleLogSync();
+          return syncNotes().then(function(){
+            return { restored: вернулось, from: найдено.sha.slice(0, 7) };
+          });
+        });
+      });
   }
 
   /* ---------- копии: список, чтение, восстановление, удаление ----------
@@ -4959,6 +5221,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // здесь — после того, как расписание уже на экране. Тихо: человек не
     // просил её сейчас, и запуск приложения задерживать нечем.
     flushPendingSnapshot();
+    // Заметки сливаются при запуске: то, что написали с другого устройства,
+    // человек должен увидеть сразу, а не через минуту тишины.
+    if(syncAvailable()){
+      syncNotes().catch(function(err){
+        logEvent('notes', 'sync failed', err.kind);
+        scheduleLogSync();
+      });
+    }
     // Журнал уезжает последним и молча: он нужен, только когда что-то уже
     // случилось, и задерживать ради него запуск незачем.
     syncLog();
