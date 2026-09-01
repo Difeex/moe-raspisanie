@@ -530,11 +530,35 @@
      светлая половина фаски просто пропадала. Снаружи она ложится ровно под
      тёмной линией, то есть туда же, куда и в календаре. */
   .panel-divider{
-    display:none;height:0;flex:none;
-    margin:6px -21px;border-top:1px solid var(--border-soft);
+    display:none;flex:none;align-items:center;gap:8px;margin:0 -21px;
+  }
+  .panel-divider.visible{display:flex}
+  /* Черта — не рамка самого блока, а два его псевдоэлемента: длинный слева и
+     короткий справа. Так счётчик стоит в разрыве линии, а не поверх неё —
+     подложка под текстом не нужна, а она здесь и невозможна: фон панели
+     полупрозрачный, и подобрать под него плотность на глаз нельзя.
+     Тень внешняя, а не inset: при нулевой высоте внутрь класть её некуда. */
+  .panel-divider::before,
+  .panel-divider::after{
+    content:"";height:0;border-top:1px solid var(--border-soft);
     box-shadow:0 1px 0 var(--border);
   }
-  .panel-divider.visible{display:block}
+  .panel-divider::before{flex:1}
+  .panel-divider::after{width:14px;flex:none}
+  /* Кегль меньше всего остального в панели: счётчик — служебная пометка, а не
+     содержание. line-height:1 обязателен — иначе строка распирает промежуток
+     между управлением и списком. */
+  .divider-count{
+    font-size:11.5px;font-weight:700;line-height:1;color:var(--text-faint);
+    white-space:nowrap;letter-spacing:.02em;
+  }
+  /* Без счётчика черта ведёт себя как прежде: сплошная линия нулевой высоты,
+     с полями 6px, которые вместе с 14px промежутка панели дают привычные 20px
+     воздуха с обеих сторон. Со счётчиком поля не нужны — высоту задаёт сам
+     текст, и 14px промежутка хватает. */
+  .panel-divider:not(.has-count){margin:6px -21px}
+  .panel-divider:not(.has-count)::after{display:none}
+  .panel-divider:not(.has-count) .divider-count{display:none}
   .cf-list{display:flex;flex-wrap:wrap;gap:6px}
   /* Read-only chips: deliberately one neutral style, without the fills the
      real filter chips use, so nothing here invites a tap.
@@ -1233,7 +1257,7 @@
       <!-- Черта отделяет то, чем список управляется (фильтры, чип даты), от
            самого списка и всего, что к нему относится, — плашки праздника,
            карточек, заглушек. -->
-      <div class="panel-divider" id="listDivider"></div>
+      <div class="panel-divider" id="listDivider"><span class="divider-count" id="listCount"></span></div>
       <div class="holiday-banner" id="holidayBanner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
         <span id="holidayBannerText"></span>
@@ -1545,7 +1569,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','searchInput','resetFilters',
      'calendarFilters','calendarFiltersList',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
-     'dateChip','dateChipLabel','listDivider','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn'
+     'dateChip','dateChipLabel','listDivider','listCount','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
 
@@ -2609,6 +2633,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var hasControls = el.filterBar.style.display !== 'none' ||
                       el.dateChip.style.display !== 'none';
     el.listDivider.classList.toggle('visible', hasControls);
+
+    // Счётчик отвечает на вопрос «сколько сейчас показано». Без данных
+    // отвечать нечего, и черта остаётся сплошной.
+    var total = events.length;
+    var text = '';
+    if(total){
+      var shown = getFilteredEvents().length;
+      // Пока ничего не отобрано, «12 из 83» превратилось бы в «83 из 83» —
+      // строка без смысла. Тогда называется просто объём расписания.
+      text = anyFilterActive()
+        ? shown + ' из ' + total
+        : total + ' ' + plural(total, 'занятие', 'занятия', 'занятий');
+    }
+    el.listCount.textContent = text;
+    el.listDivider.classList.toggle('has-count', !!text);
+  }
+
+  // «Фильтр включён» — это любое из условий отбора, включая выбранную дату и
+  // строку поиска: счётчик показывает результат их совместного действия.
+  function anyFilterActive(){
+    return !!filters.date || !!filters.search ||
+           filters.workTypes.size > 0 || filters.modes.size > 0 || filters.streams.size > 0;
   }
 
   // Короткая дата для строки сведений: ДД.ММ.ГГ.
