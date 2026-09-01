@@ -1850,6 +1850,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
            typeof v.text === 'string' && typeof v.updatedAt === 'string';
   }
 
+  /* Итог чтения запоминается, а не записывается сразу: заметки читаются при
+     подготовке приложения, когда журнал ещё не готов принимать записи.
+     Выкладывается это в init.
+
+     Молчать тут нельзя. Испорченный ключ означает, что все заметки исчезли, а
+     приложение открылось как ни в чём не бывало — и человек решит, что
+     потерял их сам. */
+  var notesReadNote = null;
+
   function readNotesV2(){
     var out = {};
     try{
@@ -1857,11 +1866,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(!raw) return out;
       var parsed = JSON.parse(raw);
       if(parsed && typeof parsed === 'object'){
+        var всего = 0, взято = 0;
         Object.keys(parsed).forEach(function(k){
-          if(isNoteKey(k) && isNoteValue(parsed[k])) out[k] = parsed[k];
+          всего++;
+          if(isNoteKey(k) && isNoteValue(parsed[k])){ out[k] = parsed[k]; взято++; }
         });
+        // Отброшенные записи — не мелочь: каждая это пропавшая заметка.
+        if(взято !== всего) notesReadNote = { код: 'часть записей негодна',
+          подробность: { всего: всего, взято: взято } };
+      } else {
+        notesReadNote = { код: 'хранилище не того вида' };
       }
-    }catch(e){}
+    }catch(e){
+      notesReadNote = { код: 'хранилище не прочиталось',
+        подробность: { причина: (e && e.name) ? e.name : 'неизвестно' } };
+    }
     return out;
   }
 
@@ -1892,8 +1911,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return moved;
   }
 
+  var notesMigrated = 0;
   notes = readNotesV2();
   if(migrateNotesV1(notes)){
+    notesMigrated = Object.keys(notes).length;
     try{ localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }catch(e){}
   }
 
@@ -2302,13 +2323,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }catch(e){ /* localStorage may be unavailable — app still works for this session */ }
   }
   function loadFromStorage(){
+    var raw = null;
     try{
-      var raw = localStorage.getItem(STORAGE_EVENTS);
+      raw = localStorage.getItem(STORAGE_EVENTS);
       if(!raw) return null;
       var rawMeta = localStorage.getItem(STORAGE_META);
       return { events: reviveEvents(JSON.parse(raw)),
                meta: rawMeta ? JSON.parse(rawMeta) : null };
-    }catch(e){ return null; }
+    }catch(e){
+      // Расписание в хранилище было, но не прочиталось. Приложение покажет
+      // «не загружено», и без этой записи выглядело бы, будто человек его
+      // никогда и не грузил.
+      if(raw) logEvent('расписание', 'хранилище не прочиталось',
+        { причина: (e && e.name) ? e.name : 'неизвестно', символов: raw.length });
+      return null;
+    }
   }
 
   // ---------- заметки к дням ----------
@@ -3882,14 +3911,22 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function loadSession(){
+    var raw = null;
     try{
-      var raw = localStorage.getItem(STORAGE_SESSION);
+      raw = localStorage.getItem(STORAGE_SESSION);
       if(!raw) return null;
       var s = JSON.parse(raw);
       // Запись без токена или репозитория бесполезна: она осталась бы от
       // прежнего формата и только мешала бы войти заново.
+      if(!(s && s.token && s.repo)) logEvent('вход', 'запись сессии негодна');
       return (s && s.token && s.repo) ? s : null;
-    }catch(e){ return null; }
+    }catch(e){
+      // Сессия была, но не прочиталась — человека попросят войти заново, и
+      // без записи это выглядело бы как самопроизвольный выход.
+      if(raw) logEvent('вход', 'сессия не прочиталась',
+        { причина: (e && e.name) ? e.name : 'неизвестно' });
+      return null;
+    }
   }
 
   function base64ToBytes(str){
@@ -4489,6 +4526,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // Перехват ставится первым: он должен работать и на ошибках самой
     // подготовки приложения, а не только на том, что случится потом.
     watchUnhandled();
+    // Заметки читаются раньше, чем журнал готов принимать записи, поэтому их
+    // итог откладывался до этой точки.
+    if(notesReadNote){
+      logEvent('заметки', notesReadNote.код, notesReadNote.подробность);
+      scheduleLogSync();
+    }
+    if(notesMigrated) logEvent('заметки', 'перенесены со старого формата', { заметок: notesMigrated });
     collectDom();
     bindStaticEvents();
     // Drop data cached by the previous export format so it doesn't sit in the
