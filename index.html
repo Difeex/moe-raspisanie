@@ -4405,6 +4405,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // хранилища» иначе нечем — GET отвечает 404 в обоих случаях.
   var repoChecked = null;
 
+  /* Записи идут не чаще одной в секунду.
+
+     GitHub считает отдельно не только общий предел в 5000 запросов в час, но и
+     «создание содержимого»: не больше 80 в минуту и 500 в час. Каждая наша
+     запись — коммит, то есть попадает именно туда. Плюс отдельная
+     рекомендация: подряд идущие записи в один репозиторий разносить хотя бы на
+     секунду.
+
+     Упереться в это нашей схемой невозможно — слияние заметок отложено на
+     минуту тишины, журнал уезжает при запуске и через десять секунд после
+     отказа. Но пачки из двух-трёх записей подряд у нас есть: сохранение копии
+     пишет файл и следом убирает прежний за тот же период. Разнести их стоит
+     хотя бы потому, что это просят делать.
+
+     Ожидание при этом человек не замечает: всё это происходит в фоне, когда
+     расписание уже на экране. */
+  var WRITE_GAP = 1000;
+  var lastWriteAt = 0;
+
+  function pauseBeforeWrite(){
+    var прошло = Date.now() - lastWriteAt;
+    if(прошло >= WRITE_GAP) return Promise.resolve();
+    return new Promise(function(resolve){ setTimeout(resolve, WRITE_GAP - прошло); });
+  }
+
   function apiFetch(method, path, body, opts){
     if(!syncAvailable()) return Promise.reject(syncError('auth'));
     var url = GITHUB_API + '/repos/' + session.owner + '/' + session.repo + path;
@@ -4432,7 +4457,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // страницы. Обычный запрос браузер там обрывает, этот доживает.
     if(opts && opts.keepalive) init.keepalive = true;
 
-    return fetch(url, init).then(function(res){
+    // Чтение задерживать незачем: в счёт создания содержимого оно не идёт, а
+    // при уходе со страницы лишняя секунда означала бы, что запрос не успеет
+    // уйти вовсе.
+    var готово = (method === 'GET' || (opts && opts.keepalive))
+      ? Promise.resolve() : pauseBeforeWrite();
+
+    return готово.then(function(){
+      if(method !== 'GET') lastWriteAt = Date.now();
+      return fetch(url, init);
+    }).then(function(res){
       if(res.ok) return res.status === 204 ? null : res.json();
       throw syncError(classifyStatus(res, method));
     }, function(){
