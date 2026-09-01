@@ -3042,7 +3042,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // Обычно скрипт лежит в конце body и DOMContentLoaded ещё впереди. Но
+  // страница может быть восстановлена браузером — на Android Chrome выгружает
+  // вкладки из памяти и при возврате поднимает их заново, — и тогда событие
+  // успевает пройти до того, как сюда доходит выполнение. Слушатель в этом
+  // случае не сработает никогда, а человек увидит пустую страницу с рабочим
+  // HTML внутри. Поэтому состояние документа проверяется явно.
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
 </script>
 </body>
