@@ -4056,13 +4056,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // разошлись бы формой, и восстановление отдало бы приложению строку там,
   // где оно ждёт дату.
   function buildSnapshot(list, m, period){
-    return JSON.stringify({
+    return {
       version: 1,
       savedAt: new Date().toISOString(),
       period: period,
       meta: m,
       events: serializeEvents(list)
-    });
+    };
+  }
+
+  // Содержательная часть копии — всё, кроме времени сохранения. По ней
+  // решается, отличается ли новая копия от лежащей: время сохранения
+  // отличается всегда и само по себе ничего не значит.
+  function snapshotBody(snap){
+    return JSON.stringify({ version: snap.version, period: snap.period,
+                            meta: snap.meta, events: snap.events });
   }
 
   /* Сохранение копии.
@@ -4083,14 +4091,29 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!period) return Promise.reject(syncError('unknown'));
     var name = snapshotName(period, warn);
     var path = SNAPSHOT_DIR + '/' + name;
-    var text = buildSnapshot(events, meta, period);
+    var snap = buildSnapshot(events, meta, period);
+    var body = snapshotBody(snap);
 
-    // Копия замещает прежнюю целиком, поэтому transform игнорирует то, что
-    // лежало в файле, — сливать тут нечего. Но пройти через updateFile всё
-    // равно нужно: он добывает sha и разбирает столкновение, если с другого
-    // устройства пишут в этот же файл.
+    /* Копия замещает прежнюю целиком — сливать тут нечего, в отличие от
+       заметок. Но пройти через updateFile всё равно нужно: он добывает sha и
+       разбирает столкновение, если с другого устройства пишут в этот же файл.
+
+       Совпадающая копия не записывается вовсе. Расписание за период одно, и
+       вторая запись того же содержимого даёт лишний коммит в чужом хранилище
+       и ничего больше. Случается это чаще, чем кажется: повторная загрузка
+       того же файла, две вкладки, досылка, начатая дважды подряд.
+
+       Сравнивается содержательная часть, без времени сохранения: оно
+       отличается всегда, и по нему любые две копии выглядели бы разными. */
     return updateFile(path, 'Копия расписания за ' + period.from + ' — ' + period.to,
-      function(){ return text; }
+      function(current){
+        if(current){
+          try{
+            if(snapshotBody(JSON.parse(current)) === body) return null;
+          }catch(e){ /* нечитаемое содержимое просто замещается */ }
+        }
+        return JSON.stringify(snap);
+      }
     ).then(function(){
       return cleanupPeriod(period, name);
     }).then(function(removed){
