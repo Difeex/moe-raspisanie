@@ -2,5 +2,11 @@
   "_": "Записи входа. Создаются локальной утилитой, в этот репозиторий она не входит. Пустой список entries означает, что вход не настроен: приложение работает как обычный локальный календарь, без резервных копий. Ни имён, ни адресов репозиториев, ни токенов открытым текстом здесь нет — всё лежит внутри зашифрованных записей, и открывается только своим паролем.",
   "version": 1,
   "iterations": 300000,
-  "entries": []
+  "entries": [
+    {
+      "salt": "uUDQzo4PaJuOXVI7E4Xf9Q==",
+      "iv": "IczOk1laSh6cBbj6",
+      "data": "JwBYoH8XBPHdBRI6wGN+GY7OHTH6AFhRR/vvEWFZRuT/SDe3I5dSLDmPLdg5LqOHUlnfJvYxsn7jaH6++RVosy4YzMHdugnSjWDx5NsXL+2ijMmDs8xi8yZcD3ml6oJ5FymR3PrXxQ6QtLQ+7wI4hJ/19foXFE1RzCUJoLxzF7A3JInK9e8330t9tXl1NN2zHcQvZkXW7z2lJS08WbwBcu9QxvKAZIdVuUx+asZA46op0MiSgTFzERFH61ohLLSSfYecszaOPaBF4A3E"
+    }
+  ]
 }
