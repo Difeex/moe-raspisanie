@@ -2210,6 +2210,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
       commitLoad(parsed, newMeta);
     }).catch(function(err){
+      // Имя файла не записывается: в нём бывает ФИО. Причина отказа — это
+      // фраза самого приложения, в ней персональных данных нет.
+      logEvent('выгрузка', 'разбор не удался', err && err.message ? err.message : 'неизвестно');
       showUploadError(err && err.message ? err.message : 'Не удалось прочитать файл. Проверьте, что это выгрузка расписания в формате .xlsx.');
     });
   }
@@ -2234,6 +2237,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     filters = { workTypes:new Set(), modes:new Set(), streams:new Set(), search:'', date:null };
     el.searchInput.value = '';
     saveToStorage(events, meta);
+    // Счётчики, а не содержимое: сами пропущенные строки несут названия
+    // дисциплин, и в журнале им делать нечего.
+    logEvent('выгрузка', 'разобрана', { занятий: newMeta.count,
+      пропущено: (newMeta.skipped || []).length,
+      выбросов: (newMeta.outliers || []).length });
     // Копия уезжает в хранилище сама и в фоне: расписание уже на экране, и
     // заставлять человека ждать сетевой запрос незачем. Неудача не рушит
     // загрузку — она оставляет отметку и повторится при следующем запуске.
@@ -3557,6 +3565,94 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
 
+  // ---------- журнал ----------
+  /* Приложение работает у чужого человека, на чужом устройстве, и когда у него
+     что-то не выходит, спросить об этом нечего: ошибки в консоли исчезают при
+     перезагрузке, а в консоль преподаватель не полезет.
+
+     Журнал живёт в браузере, а копия уезжает в приватное хранилище. Порядок
+     именно такой, а не наоборот: журнал, который пишется сразу в хранилище,
+     отказывает ровно тогда, когда он нужен, — сломалась синхронизация, значит
+     и записать некуда. Локальный буфер переживает и отсутствие сети, и
+     отозванный токен, и перезагрузку.
+
+     ЧЕГО ЗДЕСЬ НЕ ДОЛЖНО БЫТЬ НИКОГДА: токенов, паролей, текста заметок, ФИО,
+     групп, аудиторий, названий дисциплин. Только коды, счётчики и время.
+     Причина не в законе о данных, а в том, что журнал пересылают в переписку:
+     он обязан быть таким, чтобы его можно было цитировать не глядя. Один раз
+     токен уже утёк именно так — при обычной проверке содержимого хранилища.
+
+     Даты заметок — исключение, они остаются. Без них «стёртая заметка
+     воскресла» неотличимо от «заметка не сохранилась», а сама дата ничего о
+     человеке не сообщает. */
+
+  var LOG_KEY = 'educal.log.v1';
+  var LOG_MAX = 300;
+  var LOG_MAX_CHARS = 48000;
+
+  var logBuffer = (function(){
+    try{
+      var raw = localStorage.getItem(LOG_KEY);
+      var arr = raw ? JSON.parse(raw) : null;
+      return Array.isArray(arr) ? arr : [];
+    }catch(e){ return []; }
+  })();
+
+  /* Сквозной счётчик записей. Признаком «появилось новое» он служит вместо
+     времени, и это не придирка: две записи попадают в одну миллисекунду
+     сплошь и рядом — разбор выгрузки и следующая за ним попытка копии
+     оказываются с одинаковой отметкой. По времени журнал тогда считался бы
+     неизменившимся и не уезжал бы. */
+  var logSeq = logBuffer.length ? (logBuffer[logBuffer.length - 1].n || 0) : 0;
+
+  // Ключи короткие: n — номер, t — время, a — область, c — код события,
+  // d — подробность. Журнал лежит в том же хранилище, что и расписание, и
+  // растолстеть ему там не на чем.
+  function logEvent(area, code, detail){
+    var rec = { n: ++logSeq, t: new Date().toISOString(), a: area, c: code };
+    if(detail !== undefined && detail !== null) rec.d = detail;
+    logBuffer.push(rec);
+    // Кольцо: старое вытесняется. Ограничение двойное — по числу записей и по
+    // объёму, потому что одна запись бывает заметно длиннее прочих.
+    if(logBuffer.length > LOG_MAX) logBuffer = logBuffer.slice(-LOG_MAX);
+    var text = JSON.stringify(logBuffer);
+    while(text.length > LOG_MAX_CHARS && logBuffer.length > 10){
+      logBuffer = logBuffer.slice(Math.ceil(logBuffer.length / 4));
+      text = JSON.stringify(logBuffer);
+    }
+    try{ localStorage.setItem(LOG_KEY, text); }catch(e){
+      // Хранилище переполнено или недоступно — журнал не повод ломать работу.
+    }
+  }
+
+  /* Отправка журнала в приватное хранилище — раз за запуск и только если
+     появилось новое.
+
+     Файл перезаписывается целиком, а не дописывается. Дозапись означала бы
+     обращение к хранилищу на каждое событие, то есть десятки коммитов в день
+     в том самом репозитории, историю которого мы используем для восстановления
+     заметок. А история журнала при перезаписи всё равно сохраняется — её
+     ведёт git.
+
+     Отправка журнала сама в журнал не пишется: запись о записи росла бы
+     бесконечно и вытеснила бы всё остальное. */
+  function syncLog(){
+    if(!syncAvailable() || !logBuffer.length) return Promise.resolve(null);
+    var последняя = logBuffer[logBuffer.length - 1].n;
+    if(syncState().logSentAt === последняя) return Promise.resolve(null);
+    var text = JSON.stringify(logBuffer, null, 1);
+    return updateFile('log.json', 'Журнал приложения', function(current){
+      return current === text ? null : text;
+    }).then(function(){
+      saveSyncState({ logSentAt: последняя });
+      return true;
+    }, function(){
+      // Не отправился — не беда и не повод сообщать: попробуем при следующем
+      // запуске, а сам журнал никуда не делся.
+      return null;
+    });
+  }
+
   // ---------- вход по паролю ----------
   /* Рядом с приложением, в том же публичном репозитории, лежит users.json — и
      в нём записи вида «соль, вектор, шифротекст». Внутри шифротекста имя
@@ -3750,11 +3846,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         // Одна формулировка на все случаи. Разделять «такого нет» и «пароль
         // не тот» и нечем, и незачем: подсказка о том, что запись существует,
         // помогла бы только перебору.
+        logEvent('вход', 'пароль не подошёл');
         el.lockError.textContent = 'Пароль не подошёл.';
         el.lockInput.select();
         return;
       }
       session = rec;
+      logEvent('вход', 'вошёл');
       // Вход держится до кнопки «Выйти»: пароль машинный и длинный, набирать
       // его при каждом запуске приложения, которое открывают по нескольку раз
       // в день, невозможно. Расшифрованная запись лежит в localStorage рядом
@@ -3775,6 +3873,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function logout(){
+    logEvent('вход', 'вышел');
     session = null;
     try{ localStorage.removeItem(STORAGE_SESSION); }catch(e){}
     el.logoutBtn.style.display = 'none';
@@ -4194,6 +4293,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function saveScheduleQuietly(){
     if(!syncAvailable()){
       saveSyncState({ lastResult: { ok: false, kind: 'нет входа', at: new Date().toISOString() } });
+      logEvent('копия', 'не пробовали', 'вход не выполнен');
       return;
     }
     if(!events.length) return;
@@ -4201,8 +4301,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     syncSaveSchedule().then(function(r){
       saveSyncState({ lastResult: { ok: true, name: r.name, replaced: r.replaced,
                                     at: new Date().toISOString() } });
+      // Имя копии — это только период, персональных данных в нём нет.
+      logEvent('копия', 'сохранена', { файл: r.name, занятий: r.count,
+                                       убрано: r.replaced, предупреждения: r.warn });
     }, function(err){
       saveSyncState({ lastResult: { ok: false, kind: err.kind, at: new Date().toISOString() } });
+      logEvent('копия', 'не сохранилась', err.kind);
       // auth и notFound повторять бессмысленно — они сами не пройдут, и
       // отметка о недосланной копии только вводила бы в заблуждение.
       if(err.kind === 'offline' || err.kind === 'server' || err.kind === 'conflict'){
@@ -4243,10 +4347,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       showNoData();
       renderShell();
     }
+    logEvent('запуск', 'открыто', { занятий: events.length,
+      синхронизация: syncAvailable() ? 'есть' : 'нет' });
     // Копия, не уехавшая в прошлый раз из-за отсутствия сети, досылается
     // здесь — после того, как расписание уже на экране. Тихо: человек не
     // просил её сейчас, и запуск приложения задерживать нечем.
     flushPendingSnapshot();
+    // Журнал уезжает последним и молча: он нужен, только когда что-то уже
+    // случилось, и задерживать ради него запуск незачем.
+    syncLog();
   }
 
   // Обычно скрипт лежит в конце body и DOMContentLoaded ещё впереди. Но
