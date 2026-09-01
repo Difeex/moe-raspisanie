@@ -10,12 +10,19 @@
    достаётся при следующем запуске. Обратный порядок (сначала сеть) означал бы
    ожидание на каждом запуске и пустой экран в метро.
 
-   Кэшируется только своё: index.html, манифест и иконки. Запросы к GitHub API
-   (резервные копии) через service worker не проходят вовсе — им место в сети,
-   а не в кэше. */
+   Кэшируется только своё: index.html, манифест, иконки и users.json. Запросы
+   к GitHub API (резервные копии) через service worker не проходят вовсе — им
+   место в сети, а не в кэше.
 
-var CACHE = 'raspisanie-v1';
-var ASSETS = ['./', './index.html', './manifest.webmanifest',
+   Исключение одно — users.json, список записей входа. Для него порядок
+   обратный, сначала сеть: по общей стратегии добавленный пользователь не смог
+   бы войти до следующего запуска, потому что первый запрос отдал бы старую
+   копию файла. Кэш здесь остаётся запасным вариантом и нужен ровно затем,
+   чтобы вход работал без сети. */
+
+var CACHE = 'raspisanie-v2';
+var AUTH = 'users.json';
+var ASSETS = ['./', './index.html', './manifest.webmanifest', './' + AUTH,
               './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', function(e){
@@ -40,6 +47,19 @@ self.addEventListener('fetch', function(e){
   if(req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
 
   e.respondWith(caches.open(CACHE).then(function(cache){
+    if(new URL(req.url).pathname.split('/').pop() === AUTH){
+      return fetch(req).then(function(res){
+        if(res && res.status === 200 && res.type === 'basic') cache.put(req, res.clone());
+        return res;
+      }).catch(function(){
+        // Без сети остаётся сохранённая копия. Если её нет — вход не
+        // настроен, и приложение откроется локальным календарём.
+        return cache.match(req).then(function(cached){
+          return cached || new Response('', { status: 504 });
+        });
+      });
+    }
+
     return cache.match(req).then(function(cached){
       var network = fetch(req).then(function(res){
         // В кэш кладём только удачные ответы. Иначе туда однажды попадёт

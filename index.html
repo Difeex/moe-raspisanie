@@ -43,6 +43,21 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="theme-color" content="#eef3fb">
+<!-- Приложение прячется ещё до первого кадра. Список записей входа лежит в
+     отдельном файле и читается запросом, то есть решение «пускать или
+     спрашивать пароль» приходит с задержкой; без этой строки расписание
+     успело бы мелькнуть на экране и только потом закрыться формой входа.
+     Класс снимается в любом случае — и после ввода пароля, и когда вход не
+     настроен, — но снимает его уже код приложения.
+     При открытии файла с диска (file://) вход невозможен в принципе: рядом
+     нет users.json, и запрос по такому протоколу браузер не выполнит. Файл
+     остаётся самодостаточным, как раньше, поэтому проверка протокола здесь
+     та же, что у регистрации service worker внизу файла. -->
+<script>
+  if(location.protocol.indexOf('http') === 0){
+    document.documentElement.className += ' auth-pending';
+  }
+</script>
 <style>
   /* ===== Golos Text =====
      Шрифт вшит в файл, а не подключён из сети: приложение работает офлайн, и
@@ -1028,6 +1043,42 @@
   .confirm-card p{margin:0;font-size:13.5px;color:var(--text);line-height:1.5}
   .confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
 
+  /* ---------- Экран входа ---------- */
+  .auth-pending .app{display:none}
+  /* Подложки у этого слоя нет, в отличие от диалога подтверждения: тот
+     затемняет приложение, чтобы показать, над чем спрашивает, а здесь за
+     формой пусто — приложение скрыто целиком. Виден фоновый градиент
+     страницы, и вход выглядит первым экраном, а не окном поверх чужого. */
+  .lock-overlay{
+    position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+    z-index:70;padding:20px;
+  }
+  .lock-overlay.open{display:flex}
+  .lock-card{
+    max-width:340px;width:100%;padding:28px 24px;border-radius:var(--radius-xl);
+    display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;
+  }
+  .lock-card h2{margin:0;font-size:19px}
+  .lock-card p{margin:0;font-size:13.5px;color:var(--text-muted);line-height:1.5}
+  /* Овал и высота 44 — от кнопок приложения: поле здесь единственный элемент
+     ввода на экране, и своей формы ему заводить незачем. Текст по центру,
+     потому что пароль машинный и короткой подписи слева всё равно нет. */
+  .lock-input{
+    width:100%;height:44px;padding:0 16px;border-radius:999px;text-align:center;
+    border:1px solid var(--border-soft);background:var(--surface-strong);
+    color:var(--text);font-size:15px;outline:none;
+    transition:border-color .12s ease, box-shadow .12s ease;
+  }
+  .lock-input:focus{border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  .lock-card .btn{width:100%}
+  /* Пока идёт проверка, кнопка гаснет и перестаёт отзываться на наведение:
+     вывод ключа занимает около секунды, и без этого признака нажатие
+     выглядело бы пропущенным. */
+  .lock-card .btn[disabled]{opacity:.55;cursor:default;transform:none;box-shadow:none}
+  /* Место под сообщение об ошибке держится всегда: иначе карточка подпрыгивала
+     бы при первой же опечатке. */
+  .lock-error{min-height:18px;font-size:13px;line-height:1.4;color:#c0453f}
+
   /* ---------- Responsive ---------- */
   @media (max-width:860px){
     .app{padding:14px 14px 28px}
@@ -1131,7 +1182,7 @@
   /* ---------- Unsupported width guard ---------- */
   .too-narrow-overlay{display:none}
   @media (max-width:359px){
-    .app, .confirm-overlay{display:none !important}
+    .app, .confirm-overlay, .lock-overlay{display:none !important}
     .too-narrow-overlay{
       display:flex;position:fixed;inset:0;z-index:999;align-items:center;justify-content:center;
       padding:20px;background:linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 45%, var(--bg-3) 100%);
@@ -1157,6 +1208,11 @@
       </div>
     </div>
     <div class="topbar-actions">
+      <!-- «Выйти» стоит первой, дальше всех от края: «Загрузить» — главное
+           действие шапки и остаётся у самого края, а выход нажимают в разы
+           реже, чем всё остальное здесь. Кнопка появляется только у того, кто
+           вошёл по паролю; при локальной работе выходить не из чего. -->
+      <button class="hdr-btn hdr-btn-exit" id="logoutBtn" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3"/><path d="M15 16l4-4-4-4"/><path d="M19 12H10"/></svg>Выйти</button>
       <!-- Ластик, а не корзина и не крестик в кружке: крестик уже занят кнопкой
            «Сбросить» под списком, а ластик говорит именно «стереть содержимое»,
            не обещая удаления файла — файл приложение и не хранит. -->
@@ -1310,6 +1366,19 @@
 </div>
 
 <div class="stream-menu glass" id="streamMenu"></div>
+
+<!-- Экран входа лежит вне .app намеренно: приложение под ним скрыто целиком,
+     и ни расписание, ни заметки не показываются до ввода пароля. -->
+<div class="lock-overlay" id="lockOverlay">
+  <form class="lock-card glass" id="lockForm">
+    <h2>Моё расписание</h2>
+    <p>Введите пароль, чтобы открыть приложение.</p>
+    <input class="lock-input" type="password" id="lockInput" placeholder="Пароль"
+           autocomplete="current-password" spellcheck="false" autocapitalize="off" autocorrect="off">
+    <div class="lock-error" id="lockError"></div>
+    <button class="btn btn-primary" type="submit" id="lockSubmit">Войти</button>
+  </form>
+</div>
 
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-card glass">
@@ -1579,6 +1648,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     ['app','uploadBtn','fileInput','fileInputInline','dropzone','noDataCard','uploadError','uploadErrorText','clearDataBtn',
      'loadNotice','loadNoticeText','loadNoticeList','loadNoticeClose','uploadErrorClose',
      'confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
+     'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
      'dataStatus','mobileTabs','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','searchInput','resetFilters',
      'calendarFilters','calendarFiltersList',
@@ -3025,10 +3095,219 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(run) run(staged);
     });
     el.confirmOverlay.addEventListener('click', function(e){ if(e.target === el.confirmOverlay) closeConfirm(); });
+    // Форма, а не кнопка с обработчиком: так вход срабатывает и по Enter в
+    // поле, и по кнопке «Готово» на экранной клавиатуре телефона.
+    el.lockForm.addEventListener('submit', submitPassword);
+    el.logoutBtn.addEventListener('click', askLogout);
     document.addEventListener('keydown', function(e){
       if(e.key !== 'Escape') return;
       if(el.confirmOverlay.classList.contains('open')) closeConfirm();
       closeStreamMenu();
+    });
+  }
+
+
+  // ---------- вход по паролю ----------
+  /* Рядом с приложением, в том же публичном репозитории, лежит users.json — и
+     в нём записи вида «соль, вектор, шифротекст». Внутри шифротекста имя
+     владельца, его приватный репозиторий с резервными копиями и токен к нему.
+     Пароль через PBKDF2 даёт ключ, AES-GCM расшифровывает ровно одну запись —
+     свою; чужие остаются нечитаемыми, потому что ключ от них другой.
+
+     Логина нет намеренно. Он лежал бы в том же публичном файле открытым
+     текстом, ничего бы не защищал, зато выдавал бы, кто пользуется
+     приложением. Какая запись чья, файл не сообщает вовсе: приложение просто
+     пробует все по очереди, и своей оказывается та, которая расшифровалась.
+
+     Файл публичный, значит перебор пароля идёт офлайн, на чужом железе и без
+     ограничений по скорости. Защиту держит длина пароля — генератор выдаёт
+     24 случайных символа, около 140 бит, — а PBKDF2 лишь удорожает каждую
+     попытку. Число итераций читается из самого файла, а не
+     задаётся здесь: поднять его позже можно будет, не переделывая уже
+     выпущенные записи.
+
+     Записи создаёт отдельная утилита, она живёт только на диске: механика
+     выдачи доступов не должна быть частью публикуемого приложения. Приложению
+     от неё ничего не нужно — оно читает готовый файл.
+
+     Побочно форма закрывает вопрос публичности адреса: посторонний, открывший
+     страницу, приложением воспользоваться не может. Поэтому внешний сторож
+     вроде Cloudflare Access не понадобился. */
+
+  var STORAGE_SESSION = 'educal.session.v1';
+  var AUTH_FILE = 'users.json';
+
+  // Расшифрованная запись вошедшего либо null. Отсюда синхронизация возьмёт
+  // репозиторий и токен, когда дойдёт очередь до неё.
+  var session = null;
+  // Разобранный users.json. Хранится, чтобы форма после «Выйти» открывалась
+  // без второго запроса.
+  var authFile = null;
+  // Что запустить после успешного ввода пароля. При первом запуске это старт
+  // приложения, после выхода — только возврат его на экран.
+  var afterUnlock = null;
+
+  function authSupported(){
+    // Два условия. Файл, открытый с диска, вход не поддерживает: рядом нет
+    // users.json, и запрос по file:// браузер не выполнит — самодостаточность
+    // файла этим и сохраняется. И crypto.subtle существует только в
+    // защищённом контексте: по https и на localhost есть, по обычному http на
+    // чужом адресе — нет, а без него расшифровать запись нечем.
+    return location.protocol.indexOf('http') === 0 &&
+           window.crypto && window.crypto.subtle;
+  }
+
+  function loadSession(){
+    try{
+      var raw = localStorage.getItem(STORAGE_SESSION);
+      if(!raw) return null;
+      var s = JSON.parse(raw);
+      // Запись без токена или репозитория бесполезна: она осталась бы от
+      // прежнего формата и только мешала бы войти заново.
+      return (s && s.token && s.repo) ? s : null;
+    }catch(e){ return null; }
+  }
+
+  function base64ToBytes(str){
+    var bin = atob(str), out = new Uint8Array(bin.length);
+    for(var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  // Одна запись и один пароль. Возвращает содержимое записи либо null —
+  // и «пароль не тот», и «запись чужая» выглядят отсюда одинаково: AES-GCM
+  // проверяет метку подлинности и в обоих случаях бросает исключение.
+  function decryptEntry(password, entry, iterations){
+    var bytes = new TextEncoder().encode(password);
+    return crypto.subtle.importKey('raw', bytes, 'PBKDF2', false, ['deriveKey'])
+      .then(function(base){
+        return crypto.subtle.deriveKey(
+          { name:'PBKDF2', salt: base64ToBytes(entry.salt), iterations: iterations, hash:'SHA-256' },
+          base, { name:'AES-GCM', length:256 }, false, ['decrypt']);
+      })
+      .then(function(key){
+        return crypto.subtle.decrypt(
+          { name:'AES-GCM', iv: base64ToBytes(entry.iv) }, key, base64ToBytes(entry.data));
+      })
+      .then(function(buf){ return JSON.parse(new TextDecoder().decode(buf)); })
+      .catch(function(){ return null; });
+  }
+
+  // Записи перебираются по очереди, а не разом: у каждой своя соль, значит
+  // ключ выводится заново для каждой, и параллельный запуск нагрузил бы
+  // телефон втрое ради выигрыша в долю секунды. Найденная запись обрывает
+  // перебор — до чужих дело обычно не доходит.
+  function unlock(password, file){
+    var entries = file.entries || [];
+    var iterations = file.iterations || 300000;
+    var i = 0;
+    function next(){
+      if(i >= entries.length) return Promise.resolve(null);
+      return decryptEntry(password, entries[i++], iterations)
+        .then(function(rec){ return rec || next(); });
+    }
+    return next();
+  }
+
+  // no-store: список записей должен быть свежим. Иначе добавленный
+  // пользователь не смог бы войти, пока браузер держит старую копию файла.
+  // Без сети запрос падает, и это отдельный случай — см. resolveAuth.
+  function ensureAuthFile(){
+    if(authFile) return Promise.resolve(authFile);
+    return fetch(AUTH_FILE, { cache:'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(file){ authFile = file; return file; })
+      .catch(function(){ return null; });
+  }
+
+  // Пустой список записей — вход не настроен: приложение работает как обычный
+  // локальный календарь. Так же оно ведёт себя у того, кто просто скопировал
+  // репозиторий себе, и у того, кто открыл файл с диска.
+  function authConfigured(file){
+    return !!(file && file.entries && file.entries.length);
+  }
+
+  // Решение принимается до того, как приложение появится на экране.
+  // Продолжение вызывается либо сразу — вход не настроен или уже выполнен, —
+  // либо после успешного ввода пароля.
+  function resolveAuth(done){
+    if(!authSupported()) return done();
+    session = loadSession();
+    if(session) return done();
+    ensureAuthFile().then(function(file){
+      if(!authConfigured(file)) return done();
+      openLock(done);
+    });
+  }
+
+  function openLock(done){
+    afterUnlock = done;
+    el.lockError.textContent = '';
+    el.lockInput.value = '';
+    el.lockOverlay.classList.add('open');
+    // Фокус ставится только на широком экране. На телефоне всплывшая
+    // клавиатура закрыла бы карточку почти целиком, и человек не увидел бы,
+    // куда он попал и чего от него хотят.
+    if(window.matchMedia('(min-width:861px)').matches) el.lockInput.focus();
+  }
+
+  function submitPassword(e){
+    e.preventDefault();
+    var password = el.lockInput.value;
+    if(!password) return;
+    el.lockSubmit.disabled = true;
+    el.lockSubmit.textContent = 'Проверяем…';
+    el.lockError.textContent = '';
+    unlock(password, authFile).then(function(rec){
+      el.lockSubmit.disabled = false;
+      el.lockSubmit.textContent = 'Войти';
+      if(!rec){
+        // Одна формулировка на все случаи. Разделять «такого нет» и «пароль
+        // не тот» и нечем, и незачем: подсказка о том, что запись существует,
+        // помогла бы только перебору.
+        el.lockError.textContent = 'Пароль не подошёл.';
+        el.lockInput.select();
+        return;
+      }
+      session = rec;
+      // Вход держится до кнопки «Выйти»: пароль машинный и длинный, набирать
+      // его при каждом запуске приложения, которое открывают по нескольку раз
+      // в день, невозможно. Расшифрованная запись лежит в localStorage рядом
+      // с самим расписанием — на устройстве, которое человек и так считает
+      // своим; выход её оттуда убирает.
+      try{ localStorage.setItem(STORAGE_SESSION, JSON.stringify(rec)); }catch(e){}
+      el.lockOverlay.classList.remove('open');
+      el.lockInput.value = '';
+      var done = afterUnlock; afterUnlock = null;
+      if(done) done();
+    });
+  }
+
+  function askLogout(){
+    askConfirm('Выйти из приложения?',
+      'Загруженное расписание останется в этом браузере. Резервные копии будут недоступны, пока вы не введёте пароль снова.',
+      'Выйти', logout);
+  }
+
+  function logout(){
+    session = null;
+    try{ localStorage.removeItem(STORAGE_SESSION); }catch(e){}
+    // Приложение прячется тем же классом, что и при запуске, — иначе за
+    // формой входа осталось бы видно расписание.
+    document.documentElement.classList.add('auth-pending');
+    el.logoutBtn.style.display = 'none';
+    ensureAuthFile().then(function(file){
+      if(!authConfigured(file)){
+        // Записей больше нет — их убрали, пока человек работал, либо файл не
+        // достался без сети. Запирать в форме, в которую невозможно войти,
+        // нельзя: приложение просто открывается локальным.
+        document.documentElement.classList.remove('auth-pending');
+        return;
+      }
+      openLock(function(){
+        document.documentElement.classList.remove('auth-pending');
+        el.logoutBtn.style.display = '';
+      });
     });
   }
 
@@ -3038,6 +3317,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // Drop data cached by the previous export format so it doesn't sit in the
     // browser forever after the parser switched to v2.
     try{ localStorage.removeItem('educal.events.v1'); localStorage.removeItem('educal.meta.v1'); }catch(e){}
+    resolveAuth(startApp);
+  }
+
+  // Всё, что показывает приложение, вынесено сюда: до ввода пароля этого
+  // делать нельзя, а после выхода и повторного входа — уже не нужно, там
+  // достаточно вернуть на экран то, что и так отрисовано.
+  function startApp(){
+    document.documentElement.classList.remove('auth-pending');
+    if(session) el.logoutBtn.style.display = '';
     var stored = loadFromStorage();
     if(stored && stored.events.length){
       events = stored.events;
