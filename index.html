@@ -2248,16 +2248,38 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   // ---------- storage ----------
+  /* Занятие в памяти и занятие на хранении — разные вещи, и разница ровно в
+     одном поле. В памяти у занятия есть date, настоящий объект Date; при
+     сохранении он выбрасывается, а при чтении собирается заново из dateKey.
+     Хранить его незачем: он полностью выводится из ключа даты, а JSON
+     превращает Date в строку — и обратно она сама не станет.
+
+     Пара вынесена в отдельные функции, потому что мест хранения теперь два:
+     localStorage и копия в приватном репозитории. Держи преобразование в двух
+     экземплярах — и снимок однажды окажется в другом виде, чем ждёт
+     приложение. Так и случилось на первой же живой проверке: копия уехала с
+     полем date в виде строки. */
+  function serializeEvents(list){
+    return list.map(function(e){
+      return { dateKey:e.dateKey, day:e.day, start:e.start, end:e.end, discipline:e.discipline,
+        workTypeText:e.workTypeText, workTypeBucket:e.workTypeBucket,
+        buildingCode:e.buildingCode, building:e.building, mode:e.mode,
+        room:e.room, streamRaw:e.streamRaw, streamTags:e.streamTags,
+        faculty:e.faculty, course:e.course, courseConflict:e.courseConflict };
+    });
+  }
+
+  function reviveEvents(arr){
+    return arr.map(function(e){
+      var p = e.dateKey.split('-').map(Number);
+      e.date = new Date(Date.UTC(p[0], p[1]-1, p[2]));
+      return e;
+    });
+  }
+
   function saveToStorage(events, meta){
     try{
-      var serializable = events.map(function(e){
-        return { dateKey:e.dateKey, day:e.day, start:e.start, end:e.end, discipline:e.discipline,
-          workTypeText:e.workTypeText, workTypeBucket:e.workTypeBucket,
-          buildingCode:e.buildingCode, building:e.building, mode:e.mode,
-          room:e.room, streamRaw:e.streamRaw, streamTags:e.streamTags,
-          faculty:e.faculty, course:e.course, courseConflict:e.courseConflict };
-      });
-      localStorage.setItem(STORAGE_EVENTS, JSON.stringify(serializable));
+      localStorage.setItem(STORAGE_EVENTS, JSON.stringify(serializeEvents(events)));
       localStorage.setItem(STORAGE_META, JSON.stringify(meta));
     }catch(e){ /* localStorage may be unavailable — app still works for this session */ }
   }
@@ -2265,14 +2287,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     try{
       var raw = localStorage.getItem(STORAGE_EVENTS);
       if(!raw) return null;
-      var arr = JSON.parse(raw);
       var rawMeta = localStorage.getItem(STORAGE_META);
-      var restored = arr.map(function(e){
-        var p = e.dateKey.split('-').map(Number);
-        e.date = new Date(Date.UTC(p[0], p[1]-1, p[2]));
-        return e;
-      });
-      return { events:restored, meta: rawMeta ? JSON.parse(rawMeta) : null };
+      return { events: reviveEvents(JSON.parse(raw)),
+               meta: rawMeta ? JSON.parse(rawMeta) : null };
     }catch(e){ return null; }
   }
 
@@ -4034,13 +4051,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return !!(m && ((m.skipped && m.skipped.length) || (m.outliers && m.outliers.length)));
   }
 
+  // Занятия кладутся в том же виде, в каком лежат в браузере: без поля date,
+  // которое собирается из dateKey при чтении. Иначе копия и хранилище
+  // разошлись бы формой, и восстановление отдало бы приложению строку там,
+  // где оно ждёт дату.
   function buildSnapshot(list, m, period){
     return JSON.stringify({
       version: 1,
       savedAt: new Date().toISOString(),
       period: period,
       meta: m,
-      events: list
+      events: serializeEvents(list)
     });
   }
 
@@ -4184,7 +4205,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 // файла с диска (file://) регистрация невозможна, и браузер выдал бы ошибку
 // в консоль на ровном месте.
 if('serviceWorker' in navigator && location.protocol.indexOf('http') === 0){
+  var devHost = location.hostname === 'localhost' ||
+                location.hostname === '127.0.0.1' ||
+                location.hostname === '[::1]';
   window.addEventListener('load', function(){
+    if(devHost){
+      /* На сервере разработки service worker не нужен и вреден. localhost —
+         защищённый контекст, поэтому он там регистрируется как ни в чём не
+         бывало, а стратегия у него «отдать из кэша, обновить в фоне»: после
+         правки браузер показывает прежнюю версию файла, а новую скачивает
+         в фоне и отдаёт только к следующему запуску. Проверяешь правку — а
+         видишь код, который был до неё.
+
+         Уже зарегистрированный снимается, а не просто не ставится: без этого
+         он остался бы жить в браузерах, где успел появиться, и продолжал бы
+         подсовывать старое. Офлайн-кэш от этого не страдает — по
+         опубликованному адресу всё работает как прежде, и проверять его надо
+         именно там. */
+      navigator.serviceWorker.getRegistrations().then(function(list){
+        list.forEach(function(reg){ reg.unregister(); });
+      }).catch(function(){});
+      return;
+    }
     navigator.serviceWorker.register('sw.js').catch(function(){
       /* Без него приложение просто не будет открываться офлайн — не повод
          показывать что-то пользователю. */
