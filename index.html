@@ -4138,9 +4138,27 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     saveSyncState({ pendingSnapshot: new Date().toISOString() });
   }
 
+  /* Исход последней попытки записывается всегда — и удача, и неудача.
+
+     Без этого сохранение молчит в обе стороны: человек не знает, есть ли
+     копия, и разобраться потом нельзя даже по следам. Молчит оно ровно в том
+     случае, ради которого вся затея и делалась.
+
+     lastResult — не для красоты: интерфейс будет показывать по нему состояние,
+     а до тех пор по нему видно, что произошло. Секретов в нём нет — время и
+     вид ошибки. */
   function saveScheduleQuietly(){
-    if(!syncAvailable() || !events.length) return;
-    syncSaveSchedule().catch(function(err){
+    if(!syncAvailable()){
+      saveSyncState({ lastResult: { ok: false, kind: 'нет входа', at: new Date().toISOString() } });
+      return;
+    }
+    if(!events.length) return;
+    saveSyncState({ lastResult: { ok: null, kind: 'идёт запись', at: new Date().toISOString() } });
+    syncSaveSchedule().then(function(r){
+      saveSyncState({ lastResult: { ok: true, name: r.name, replaced: r.replaced,
+                                    at: new Date().toISOString() } });
+    }, function(err){
+      saveSyncState({ lastResult: { ok: false, kind: err.kind, at: new Date().toISOString() } });
       // auth и notFound повторять бессмысленно — они сами не пройдут, и
       // отметка о недосланной копии только вводила бы в заблуждение.
       if(err.kind === 'offline' || err.kind === 'server' || err.kind === 'conflict'){
