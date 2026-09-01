@@ -3750,10 +3750,25 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
      3000 строк по 112 байт в среднем — около 350 КБ, почти трёхкратный запас.
      Столько помещается именно потому, что журнал ведётся на латинице: в UTF-8
-     она занимает байт на символ, а кириллица два, и те же 350 КБ вместили бы
-     вдвое меньше строк. */
+     она занимает байт на символ, а кириллица два.
+
+     Предел считается в БАЙТАХ, а не в символах, и это не придирка. Сообщения
+     об ошибках приходят из приложения по-русски, и журнал, набитый ими,
+     занимал бы при 350 000 символов все 550 КБ — вдвое больше задуманного.
+     Считать надо то же, что считает GitHub. */
   var LOG_MAX = 3000;
-  var LOG_MAX_CHARS = 350000;
+  var LOG_MAX_BYTES = 350000;
+
+  // Длина строки в байтах UTF-8. Пара суррогатов (эмодзи) даёт по два байта на
+  // половину, то есть четыре на символ, — так оно и кодируется.
+  function byteLen(str){
+    var n = 0, c, i;
+    for(i = 0; i < str.length; i++){
+      c = str.charCodeAt(i);
+      n += c < 0x80 ? 1 : c < 0x800 ? 2 : (c >= 0xD800 && c < 0xE000) ? 2 : 3;
+    }
+    return n;
+  }
   // Отсрочка перед отправкой после отказа: события ходят пачками — не тот
   // пароль, ещё раз не тот, потом битый файл, — и уезжать надо один раз за
   // пачку, а не на каждую строку.
@@ -3771,6 +3786,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
     }catch(e){}
     return { seq: 0, lines: [] };
+  })();
+
+  // Объём в байтах держится счётчиком, а не пересчитывается на каждую запись:
+  // пробегать три тысячи строк ради одной добавленной незачем. Полный пересчёт
+  // делается один раз, при загрузке.
+  var logBytes = (function(){
+    var n = 0, i;
+    for(i = 0; i < logStore.lines.length; i++) n += byteLen(logStore.lines[i]) + 1;
+    return n;
   })();
 
   /* Время местное, со смещением, а не UTC. Это ровно тот случай, когда важно
@@ -3895,11 +3919,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
        Выбрасывается ровно столько, сколько нужно, а не доля от всего.
        Отрезание четверти за раз держало бы журнал на трёх четвертях ёмкости и
        выбрасывало бы сотни строк там, где мешает одна. */
-    if(logStore.lines.length > LOG_MAX) logStore.lines = logStore.lines.slice(-LOG_MAX);
-    var объём = 0, i;
-    for(i = 0; i < logStore.lines.length; i++) объём += logStore.lines[i].length + 1;
-    while(объём > LOG_MAX_CHARS && logStore.lines.length > 10){
-      объём -= logStore.lines[0].length + 1;
+    logBytes += byteLen(logStore.lines[logStore.lines.length - 1]) + 1;
+    while(logStore.lines.length > LOG_MAX && logStore.lines.length > 10){
+      logBytes -= byteLen(logStore.lines[0]) + 1;
+      logStore.lines.shift();
+    }
+    while(logBytes > LOG_MAX_BYTES && logStore.lines.length > 10){
+      logBytes -= byteLen(logStore.lines[0]) + 1;
       logStore.lines.shift();
     }
     try{ localStorage.setItem(LOG_KEY, JSON.stringify(logStore)); }catch(e){
