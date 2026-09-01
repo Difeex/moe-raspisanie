@@ -3650,7 +3650,49 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      человеке не сообщает. */
 
   var LOG_KEY = 'educal.log.v1';
-  var LOG_FILE = 'log.txt';
+  var DEVICE_KEY = 'educal.device.v1';
+
+  /* Устройство. У человека их несколько — телефон и компьютер, — и журнал у
+     каждого свой.
+
+     Иначе выходит беда: файл перезаписывается целиком буфером того
+     устройства, которое отправляет, и телефон затирает журнал компьютера, а
+     компьютер — журнал телефона. Пропадает при этом ровно то, ради чего
+     журнал заведён: расписание добавили с одного устройства, стёрли с
+     другого, и объяснить это некому.
+
+     Поэтому у каждого устройства свой файл в logs/, а опознаётся оно коротким
+     случайным номером, который заводится один раз и живёт в браузере. Ничего
+     об устройстве этот номер не сообщает и опознать по нему человека нельзя —
+     он нужен только чтобы отличать файлы друг от друга.
+
+     Номер стоит и в каждой строке: строку из журнала цитируют отдельно от
+     файла, и без него непонятно, о каком устройстве речь. */
+  var device = (function(){
+    var d = null;
+    try{
+      var raw = localStorage.getItem(DEVICE_KEY);
+      if(raw) d = JSON.parse(raw);
+    }catch(e){}
+    if(!d || typeof d !== 'object' || !d.id){
+      var id = '';
+      try{
+        var b = new Uint8Array(3);
+        (window.crypto || {}).getRandomValues ? crypto.getRandomValues(b)
+          : (b[0] = Math.random()*256, b[1] = Math.random()*256, b[2] = Math.random()*256);
+        for(var i = 0; i < b.length; i++) id += ('0' + b[i].toString(16)).slice(-2);
+      }catch(e){ id = String(Date.now()).slice(-6); }
+      d = { id: id, version: null };
+    }
+    return d;
+  })();
+
+  function saveDevice(){
+    try{ localStorage.setItem(DEVICE_KEY, JSON.stringify(device)); }catch(e){}
+  }
+  saveDevice();
+
+  function logDir(){ return 'logs/' + device.id + '.txt'; }
   /* Пределы кольца. Верхнюю границу задаёт не localStorage, а GitHub:
      Contents API отдаёт содержимое файла только до мегабайта, а updateFile
      читает log.txt перед записью — за sha и чтобы сравнить содержимое.
@@ -3716,16 +3758,38 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      Ширина экрана — для жалоб на раскладку: она у нас разная до и после
      861 пикселя. Ни модели устройства, ни строки браузера не пишем: они
      длинные, опознают человека и ничего к делу не добавляют. */
-  function logEnvironment(){
-    var версия = 'неизвестна';
+  // Версия — время сборки самого файла. Ручной нумерации не нужно, и забыть
+  // обновить её невозможно.
+  function appVersion(){
     try{
       var d = new Date(document.lastModified);
-      if(!isNaN(d.getTime())){
-        var p = function(n){ return (n < 10 ? '0' : '') + n; };
-        версия = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
-                 ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
-      }
-    }catch(e){}
+      if(isNaN(d.getTime())) return 'неизвестна';
+      var p = function(n){ return (n < 10 ? '0' : '') + n; };
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+             ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }catch(e){ return 'неизвестна'; }
+  }
+
+  function logEnvironment(){
+    var версия = appVersion();
+    /* Смена сборки записывается отдельной строкой, а не только внутри
+       «среды».
+
+       Приложение обновляется само, из сети, и на разных устройствах человека
+       сборки расходятся: на телефоне свежая, на компьютере недельной
+       давности, потому что его не открывали. Расхождение объясняет случаи
+       вида «на телефоне работает, на компьютере нет» — и искать его глазами
+       по датам в куче строк не должно быть нужно.
+
+       Первый запуск такой строки не даёт: сравнивать не с чем, и «версия
+       изменилась» на пустом месте только сбивала бы. */
+    if(device.version && device.version !== версия){
+      logEvent('запуск', 'версия изменилась', { было: device.version, стало: версия });
+    }
+    if(device.version !== версия){
+      device.version = версия;
+      saveDevice();
+    }
     var standalone = false;
     try{
       standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
@@ -3733,6 +3797,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }catch(e){}
     logEvent('запуск', 'среда', {
       версия: версия,
+      устройство: device.id,
       приложение: standalone ? 'установлено' : 'вкладка',
       sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 'управляет' : 'нет',
       сеть: (navigator.onLine === false) ? 'нет' : 'есть',
@@ -3760,8 +3825,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function logEvent(area, code, detail){
     var хвост = logDetail(detail);
-    var строка = logStamp() + '  #' + (++logStore.seq) + '  ' + area + ' · ' + code +
-                 (хвост ? ' · ' + хвост : '');
+    var строка = logStamp() + '  ' + device.id + '  #' + (++logStore.seq) + '  ' +
+                 area + ' · ' + code + (хвост ? ' · ' + хвост : '');
     // Переводы строк схлопываются: одна запись — одна строка, иначе журнал
     // перестанет читаться и построчно, и целиком.
     logStore.lines.push(строка.replace(/\s*[\r\n]+\s*/g, ' '));
@@ -3881,7 +3946,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var text = logText();
       var номер = logStore.seq;
       logSending = true;
-      return updateFile(LOG_FILE, 'Журнал приложения', function(current){
+      return updateFile(logDir(), 'Журнал устройства ' + device.id, function(current){
         return current === text ? null : text;
       }).then(function(){
         logSending = false;
