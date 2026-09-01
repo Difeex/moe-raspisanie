@@ -1602,6 +1602,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   // v2: the stored event shape changed with the new export format, so the key
   // is bumped rather than migrated — old cached data is simply ignored.
+  /* Номер версии. Шага сборки в проекте нет намеренно — приложение это один
+     файл, который правится руками, — поэтому номер ставится тоже руками.
+
+     Поднимать его нужно, когда меняется поведение: появилась возможность,
+     переделан формат хранения, исправлена заметная поломка. Правки в
+     оформлении номера не требуют.
+
+     Одного номера мало: его забывают поднять. Поэтому рядом с ним в журнал
+     идёт дата самого файла — она берётся из ответа сервера и меняется при
+     каждой публикации сама. Номер отвечает «что это за версия», дата —
+     «насколько она свежая», и вместе они не врут даже когда номер забыли. */
+  var APP_VERSION = '1.0';
+
   var STORAGE_EVENTS = 'educal.events.v2';
   var STORAGE_META = 'educal.meta.v2';
 
@@ -3668,22 +3681,49 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
      Номер стоит и в каждой строке: строку из журнала цитируют отдельно от
      файла, и без него непонятно, о каком устройстве речь. */
+  /* Какое это устройство. Точного ответа браузер не даёт, но сочетание
+     «грубого указателя» (палец, а не мышь), числа точек касания и размера
+     экрана ошибается редко. Ноутбук с сенсорным экраном определится
+     планшетом — с этим приходится жить.
+
+     Поэтому вид определяется один раз и запоминается, а текущее определение
+     пишется при каждом запуске: разойдутся — будет видно в журнале. */
+  function detectKind(){
+    var coarse = false, touch = 0, w = 0;
+    try{ coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); }catch(e){}
+    try{ touch = navigator.maxTouchPoints || 0; }catch(e){}
+    try{ w = Math.max(screen.width || 0, screen.height || 0); }catch(e){}
+    if(coarse || touch > 0) return w >= 900 ? 'tablet' : 'phone';
+    return 'desktop';
+  }
+
+  function randomTail(){
+    var id = '';
+    try{
+      var b = new Uint8Array(2);
+      if(window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+      else { b[0] = Math.random() * 256; b[1] = Math.random() * 256; }
+      for(var i = 0; i < b.length; i++) id += ('0' + b[i].toString(16)).slice(-2);
+    }catch(e){ id = String(Date.now()).slice(-4); }
+    return id;
+  }
+
+  /* В имени файла — только то, что у устройства не меняется: вид и короткий
+     хвост, отличающий два одинаковых (два компьютера, телефон и планшет).
+
+     Установлено приложение или открыто вкладкой — в имя не идёт намеренно:
+     человек поставит его на главный экран, и журнал переехал бы в новый файл,
+     а прежний осиротел бы. Это пишется строкой при каждом запуске. */
   var device = (function(){
     var d = null;
     try{
       var raw = localStorage.getItem(DEVICE_KEY);
       if(raw) d = JSON.parse(raw);
     }catch(e){}
-    if(!d || typeof d !== 'object' || !d.id){
-      var id = '';
-      try{
-        var b = new Uint8Array(3);
-        (window.crypto || {}).getRandomValues ? crypto.getRandomValues(b)
-          : (b[0] = Math.random()*256, b[1] = Math.random()*256, b[2] = Math.random()*256);
-        for(var i = 0; i < b.length; i++) id += ('0' + b[i].toString(16)).slice(-2);
-      }catch(e){ id = String(Date.now()).slice(-6); }
-      d = { id: id, version: null };
-    }
+    if(!d || typeof d !== 'object' || !d.id) d = {};
+    if(!d.kind) d.kind = detectKind();
+    if(!d.id) d.id = d.kind + '-' + randomTail();
+    if(d.version === undefined) d.version = null;
     return d;
   })();
 
@@ -3692,7 +3732,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   saveDevice();
 
-  function logDir(){ return 'logs/' + device.id + '.txt'; }
+  function logPath(){ return 'logs/' + device.id + '.txt'; }
   /* Пределы кольца. Верхнюю границу задаёт не localStorage, а GitHub:
      Contents API отдаёт содержимое файла только до мегабайта, а updateFile
      читает log.txt перед записью — за sha и чтобы сравнить содержимое.
@@ -3761,13 +3801,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Версия — время сборки самого файла. Ручной нумерации не нужно, и забыть
   // обновить её невозможно.
   function appVersion(){
+    var дата = 'неизвестна';
     try{
       var d = new Date(document.lastModified);
-      if(isNaN(d.getTime())) return 'неизвестна';
-      var p = function(n){ return (n < 10 ? '0' : '') + n; };
-      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
-             ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
-    }catch(e){ return 'неизвестна'; }
+      if(!isNaN(d.getTime())){
+        var p = function(n){ return (n < 10 ? '0' : '') + n; };
+        дата = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+               ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+      }
+    }catch(e){}
+    return APP_VERSION + ' (' + дата + ')';
   }
 
   function logEnvironment(){
@@ -3795,9 +3838,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
                    navigator.standalone === true;
     }catch(e){}
+    // Вид определяется заново при каждом запуске и сравнивается с
+    // запомненным: разойдутся — значит определили неверно, и это должно быть
+    // видно, а не спрятано.
+    var видСейчас = detectKind();
     logEvent('запуск', 'среда', {
-      версия: версия,
+      сборка: версия,
       устройство: device.id,
+      вид: видСейчас === device.kind ? device.kind : (device.kind + '→' + видСейчас),
       приложение: standalone ? 'установлено' : 'вкладка',
       sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 'управляет' : 'нет',
       сеть: (navigator.onLine === false) ? 'нет' : 'есть',
@@ -3946,7 +3994,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var text = logText();
       var номер = logStore.seq;
       logSending = true;
-      return updateFile(logDir(), 'Журнал устройства ' + device.id, function(current){
+      return updateFile(logPath(), 'Журнал устройства ' + device.id, function(current){
         return current === text ? null : text;
       }).then(function(){
         logSending = false;
