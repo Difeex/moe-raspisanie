@@ -2213,6 +2213,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // Имя файла не записывается: в нём бывает ФИО. Причина отказа — это
       // фраза самого приложения, в ней персональных данных нет.
       logEvent('выгрузка', 'разбор не удался', err && err.message ? err.message : 'неизвестно');
+      scheduleLogSync();
       showUploadError(err && err.message ? err.message : 'Не удалось прочитать файл. Проверьте, что это выгрузка расписания в формате .xlsx.');
     });
   }
@@ -3595,8 +3596,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   var LOG_KEY = 'educal.log.v1';
   var LOG_FILE = 'log.txt';
-  var LOG_MAX = 300;
-  var LOG_MAX_CHARS = 48000;
+  var LOG_MAX = 600;
+  var LOG_MAX_CHARS = 96000;
+  // Отсрочка перед отправкой после отказа: события ходят пачками — не тот
+  // пароль, ещё раз не тот, потом битый файл, — и уезжать надо один раз за
+  // пачку, а не на каждую строку.
+  var LOG_SYNC_DELAY = 10000;
 
   // seq — сквозной номер записи, lines — готовые строки. Номер хранится
   // отдельно, а не вычитывается из последней строки: кольцо вытесняет старые
@@ -3674,6 +3679,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      И главное: эта функция не отказывает никогда. Её зовут из входа, и
      несостоявшийся журнал не имеет права помешать человеку войти. */
   var logSending = false;
+  var logSyncTimer = null;
+
+  /* Отправка после отказа, с отсрочкой.
+
+     Без неё журнал уезжал бы только при запуске и при входе — то есть человек
+     словил ошибку и пишет о ней прямо сейчас, а строки про эту ошибку доедут
+     лишь когда он в следующий раз откроет приложение. Не потеряются, но и не
+     помогут.
+
+     Отсрочка нужна, потому что отказы ходят пачками: три раза не тот пароль,
+     потом битый файл. Уезжать надо один раз за пачку.
+
+     Сеть при отказе может быть как раз тем, что сломалось. Тогда отправка
+     тихо не удастся и повторится при следующем запуске — журнал никуда не
+     делся. */
+  function scheduleLogSync(){
+    if(logSyncTimer) clearTimeout(logSyncTimer);
+    logSyncTimer = setTimeout(function(){
+      logSyncTimer = null;
+      syncLog();
+    }, LOG_SYNC_DELAY);
+  }
 
   function syncLog(){
     try{
@@ -3894,6 +3921,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         // не тот» и нечем, и незачем: подсказка о том, что запись существует,
         // помогла бы только перебору.
         logEvent('вход', 'пароль не подошёл');
+      scheduleLogSync();
         el.lockError.textContent = 'Пароль не подошёл.';
         el.lockInput.select();
         return;
@@ -4359,6 +4387,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }, function(err){
       saveSyncState({ lastResult: { ok: false, kind: err.kind, at: new Date().toISOString() } });
       logEvent('копия', 'не сохранилась', err.kind);
+      scheduleLogSync();
       // auth и notFound повторять бессмысленно — они сами не пройдут, и
       // отметка о недосланной копии только вводила бы в заблуждение.
       if(err.kind === 'offline' || err.kind === 'server' || err.kind === 'conflict'){
