@@ -1906,6 +1906,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
   // Ключ дня, который сейчас правят. null — правки нет.
   var noteEditingKey = null;
+  // Была ли заметка в этом дне до начала правки — для одной записи в журнал
+  // на законченную правку.
+  var noteEditingHad = false;
   var noteSaveTimer = null;
 
   // ---------- dom ----------
@@ -2201,6 +2204,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // Confirmation comes after a successful parse, not before: a file that
       // cannot be read never gets to threaten the schedule already loaded.
       if(events.length){
+        // Замену человек может и отменить — тогда в журнале останется
+        // «спрошено» без «подтверждена», и молчание приложения объяснится.
+        logEvent('расписание', 'замена спрошена',
+          { было: events.length, вФайле: parsed.length });
         pendingLoad = { events: parsed, meta: newMeta };
         askConfirm('Заменить расписание?',
           'Сейчас загружено занятий: ' + events.length + '. Они будут заменены данными из файла «' +
@@ -2223,6 +2230,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function applyPendingLoad(staged){
     if(!staged) return;
+    logEvent('расписание', 'замена подтверждена',
+      { было: events.length, станет: staged.events.length });
     commitLoad(staged.events, staged.meta);
   }
 
@@ -2288,8 +2297,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function saveToStorage(events, meta){
     try{
-      localStorage.setItem(STORAGE_EVENTS, JSON.stringify(serializeEvents(events)));
-      localStorage.setItem(STORAGE_META, JSON.stringify(meta));
+      storageWrite(STORAGE_EVENTS, JSON.stringify(serializeEvents(events)));
+      storageWrite(STORAGE_META, JSON.stringify(meta));
     }catch(e){ /* localStorage may be unavailable — app still works for this session */ }
   }
   function loadFromStorage(){
@@ -2304,7 +2313,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   // ---------- заметки к дням ----------
   function saveNotes(){
-    try{ localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }catch(e){ /* хранилище недоступно — заметка живёт до перезагрузки */ }
+    storageWrite(NOTES_KEY, JSON.stringify(notes));
   }
 
   // Записывает то, что сейчас в поле правки, и отвечает, изменился ли признак
@@ -2350,6 +2359,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function startNoteEdit(){
     if(!filters.date) return;
     noteEditingKey = filters.date;
+    // Что было в заметке до правки — нужно, чтобы в журнал попало одно
+    // событие на законченную правку, а не на каждое срабатывание
+    // отложенного сохранения. Текст не запоминается, только его наличие.
+    noteEditingHad = !!noteText(filters.date);
     el.noteInput.value = noteText(filters.date);
     renderNote();
     el.noteInput.focus();
@@ -2360,7 +2373,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function finishNoteEdit(){
     if(!noteEditingKey) return;
+    var ключ = noteEditingKey;
+    var было = noteEditingHad;
     var flipped = commitNote();
+    var стало = !!noteText(ключ);
+    // Дата — да, текст — никогда. Без даты «стёртая заметка воскресла»
+    // неотличимо от «заметка не сохранилась».
+    if(!было && стало) logEvent('заметка', 'создана', ключ);
+    else if(было && стало) logEvent('заметка', 'изменена', ключ);
+    else if(было && !стало) logEvent('заметка', 'очищена', ключ);
     noteEditingKey = null;
     if(flipped) renderCalendar();
     renderNote();
@@ -2376,6 +2397,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(had) notes[dateKey] = { text: '', updatedAt: new Date().toISOString() };
       saveNotes();
     }
+    if(had) logEvent('заметка', 'удалена', dateKey);
     if(noteEditingKey === dateKey){
       if(noteSaveTimer){ clearTimeout(noteSaveTimer); noteSaveTimer = null; }
       noteEditingKey = null;
@@ -3358,6 +3380,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       'Очистить', clearAllData);
   }
   function clearAllData(){
+    logEvent('расписание', 'очищено', { былоЗанятий: events.length });
     hideUploadError();
     hideLoadNotice();
     events = [];
@@ -3656,6 +3679,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
   }
 
+  /* Запись в localStorage до сих пор глохла молча во всех местах сразу:
+     переполнилось или недоступно (приватное окно) — расписание не
+     сохранилось, заметка не сохранилась, и никто об этом не узнал. Для
+     приложения, которое всё держит в браузере, это тихая потеря данных.
+
+     Отдельная жалоба на каждую неудачу не нужна: если хранилище отказало,
+     оно откажет и на следующей записи, и журнал забьётся одинаковыми
+     строками. Поэтому запись о поломке одна на запуск. */
+  var storageBroken = false;
+
+  function storageWrite(key, value){
+    try{
+      localStorage.setItem(key, value);
+      return true;
+    }catch(e){
+      if(!storageBroken){
+        storageBroken = true;
+        logEvent('хранилище', 'запись не удалась',
+          { ключ: key, причина: (e && e.name) ? e.name : 'неизвестно' });
+        scheduleLogSync();
+      }
+      return false;
+    }
+  }
+
   function logText(){
     return logStore.lines.length ? logStore.lines.join('\n') + '\n' : '';
   }
@@ -3694,6 +3742,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      Сеть при отказе может быть как раз тем, что сломалось. Тогда отправка
      тихо не удастся и повторится при следующем запуске — журнал никуда не
      делся. */
+  /* Необработанные ошибки. До сих пор их не ловил никто: исключение вне try
+     уходило в консоль и исчезало при перезагрузке.
+
+     Это самая ценная часть журнала — она ловит то, чего никто не предусмотрел.
+     Всё остальное здесь записывает случаи, о которых мы подумали заранее.
+
+     Записывается сообщение и место в файле. Файл у нас один и свой, чужих
+     адресов в нём нет; персональных данных в сообщении об ошибке взяться
+     неоткуда. */
+  function watchUnhandled(){
+    window.addEventListener('error', function(ev){
+      logEvent('сбой', 'необработанная ошибка', {
+        что: ev && ev.message ? String(ev.message).slice(0, 200) : 'неизвестно',
+        строка: (ev && ev.lineno) || 0
+      });
+      scheduleLogSync();
+    });
+    window.addEventListener('unhandledrejection', function(ev){
+      var r = ev && ev.reason;
+      logEvent('сбой', 'необработанный отказ', {
+        что: r ? String(r.message || r.kind || r).slice(0, 200) : 'неизвестно'
+      });
+      scheduleLogSync();
+    });
+  }
+
   function scheduleLogSync(){
     if(logSyncTimer) clearTimeout(logSyncTimer);
     logSyncTimer = setTimeout(function(){
@@ -3866,8 +3940,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(authFile) return Promise.resolve(authFile);
     return fetch(AUTH_FILE, { cache:'no-store' })
       .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(file){ authFile = file; return file; })
-      .catch(function(){ return null; });
+      .then(function(file){
+        if(!file) logEvent('вход', 'список записей не получен');
+        authFile = file;
+        return file;
+      })
+      .catch(function(){
+        logEvent('вход', 'список записей не получен', 'сеть');
+        return null;
+      });
   }
 
   // Пустой список записей — вход не настроен: приложение работает как обычный
@@ -3938,7 +4019,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // в день, невозможно. Расшифрованная запись лежит в localStorage рядом
       // с самим расписанием — на устройстве, которое человек и так считает
       // своим; выход её оттуда убирает.
-      try{ localStorage.setItem(STORAGE_SESSION, JSON.stringify(rec)); }catch(e){}
+      storageWrite(STORAGE_SESSION, JSON.stringify(rec));
       el.lockOverlay.classList.remove('open');
       el.lockInput.value = '';
       var done = afterUnlock; afterUnlock = null;
@@ -4015,7 +4096,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function saveSyncState(patch){
     var s = syncState();
     Object.keys(patch).forEach(function(k){ s[k] = patch[k]; });
-    try{ localStorage.setItem(STORAGE_SYNC, JSON.stringify(s)); }catch(e){}
+    storageWrite(STORAGE_SYNC, JSON.stringify(s));
     return s;
   }
 
@@ -4405,6 +4486,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function init(){
+    // Перехват ставится первым: он должен работать и на ошибках самой
+    // подготовки приложения, а не только на том, что случится потом.
+    watchUnhandled();
     collectDom();
     bindStaticEvents();
     // Drop data cached by the previous export format so it doesn't sit in the
