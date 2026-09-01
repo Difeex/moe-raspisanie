@@ -4410,6 +4410,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var url = GITHUB_API + '/repos/' + session.owner + '/' + session.repo + path;
     var init = {
       method: method,
+      /* Ответы GitHub кэшировать нельзя. Он присылает
+         Cache-Control: private, max-age=60 — то есть браузер целую минуту
+         отдаёт прежний ответ, не спрашивая сервер.
+
+         Для нас это прямая поломка. Удалили копию с телефона, открыли список
+         на компьютере — и минуту видим её на месте. Прочитали файл из кэша —
+         получили устаревший sha, и следующая запись отобьётся столкновением
+         на ровном месте.
+
+         Хранилище — не то место, где старый ответ лучше лишнего запроса. */
+      cache: 'no-store',
       headers: {
         'Authorization': 'Bearer ' + session.token,
         'Accept': 'application/vnd.github+json',
