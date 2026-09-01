@@ -1821,23 +1821,83 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // причине у заметки есть собственное удаление: крестик и кнопка в правке.
   // Привязка к дате, а не к занятию: при замене файла занятия меняются, а день
   // остаётся тем же днём.
-  var NOTES_KEY = 'educal.notes.v1';
+  // v2: под датой лежит не строка, а объект { text, updatedAt }. Форма
+  // продиктована слиянием двух устройств, и решение принято в инфраструктурной
+  // линии — здесь только хранение.
+  // Отметка времени нужна, чтобы при расхождении было чем выбрать свежую
+  // запись. Удаление же не стирает запись, а оставляет её с пустым text: иначе
+  // заметка, стёртая на телефоне, при следующем слиянии неотличима от только
+  // что добавленной на ноутбуке — и воскресает. Каждый раз.
+  // Отдельного поля deletedAt намеренно нет: приложение и так считает пустой
+  // text отсутствием заметки, а два способа сказать одно и то же рано или
+  // поздно разойдутся.
+  var NOTES_KEY = 'educal.notes.v2';
+  var NOTES_KEY_V1 = 'educal.notes.v1';
   var notes = {};
-  try{
-    var rawNotes = localStorage.getItem(NOTES_KEY);
-    if(rawNotes){
-      var parsedNotes = JSON.parse(rawNotes);
-      // Хранилище может содержать что угодно — берём только строки под ключами
-      // вида ГГГГ-ММ-ДД, иначе испорченная запись роняла бы отрисовку.
-      if(parsedNotes && typeof parsedNotes === 'object'){
-        Object.keys(parsedNotes).forEach(function(k){
-          if(/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof parsedNotes[k] === 'string' && parsedNotes[k]){
-            notes[k] = parsedNotes[k];
+
+  // Хранилище может содержать что угодно, поэтому запись берётся, только если
+  // и ключ, и обе части значения той формы, которую мы писали. Испорченная
+  // запись иначе роняла бы отрисовку целиком.
+  function isNoteKey(k){ return /^\d{4}-\d{2}-\d{2}$/.test(k); }
+  function isNoteValue(v){
+    return !!v && typeof v === 'object' &&
+           typeof v.text === 'string' && typeof v.updatedAt === 'string';
+  }
+
+  function readNotesV2(){
+    var out = {};
+    try{
+      var raw = localStorage.getItem(NOTES_KEY);
+      if(!raw) return out;
+      var parsed = JSON.parse(raw);
+      if(parsed && typeof parsed === 'object'){
+        Object.keys(parsed).forEach(function(k){
+          if(isNoteKey(k) && isNoteValue(parsed[k])) out[k] = parsed[k];
+        });
+      }
+    }catch(e){}
+    return out;
+  }
+
+  // Перенос с v1 — разовый, тем же приёмом, каким в init убираются ключи
+  // прежнего формата выгрузки. Время взять неоткуда, кроме момента переноса;
+  // на будущее это значит, что при переносе на двух устройствах при первом
+  // слиянии победит то, которое перенесло позже, — поэтому первую
+  // синхронизацию надо запускать с того устройства, где заметки писались.
+  // Уже имеющаяся запись v2 приоритетнее: она заведомо новее перенесённой.
+  function migrateNotesV1(into){
+    var raw;
+    try{ raw = localStorage.getItem(NOTES_KEY_V1); }catch(e){ return false; }
+    if(!raw) return false;
+    var moved = false;
+    try{
+      var parsed = JSON.parse(raw);
+      var now = new Date().toISOString();
+      if(parsed && typeof parsed === 'object'){
+        Object.keys(parsed).forEach(function(k){
+          if(isNoteKey(k) && typeof parsed[k] === 'string' && parsed[k] && !into[k]){
+            into[k] = { text: parsed[k], updatedAt: now };
+            moved = true;
           }
         });
       }
-    }
-  }catch(e){}
+    }catch(e){ /* испорченный старый ключ переносить нечего — просто убираем */ }
+    try{ localStorage.removeItem(NOTES_KEY_V1); }catch(e){}
+    return moved;
+  }
+
+  notes = readNotesV2();
+  if(migrateNotesV1(notes)){
+    try{ localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }catch(e){}
+  }
+
+  // Единственное место, где решается «есть ли в этом дне заметка». Надгробие —
+  // запись с пустым text — для всего приложения неотличимо от её отсутствия:
+  // и уголок в календаре, и блок в панели спрашивают отсюда.
+  function noteText(dateKey){
+    var rec = dateKey && notes[dateKey];
+    return (rec && rec.text) || '';
+  }
   // Ключ дня, который сейчас правят. null — правки нет.
   var noteEditingKey = null;
   var noteSaveTimer = null;
@@ -2219,10 +2279,24 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(noteSaveTimer){ clearTimeout(noteSaveTimer); noteSaveTimer = null; }
     if(!noteEditingKey) return false;
     var text = el.noteInput.value.trim();
-    var had = !!notes[noteEditingKey];
-    if(text) notes[noteEditingKey] = text;
-    else delete notes[noteEditingKey];
-    saveNotes();
+    var had = !!noteText(noteEditingKey);
+    // Пустой текст записывается, а не стирает запись: это надгробие, без
+    // которого удалённое воскресает при слиянии. Отметка времени ставится в
+    // обоих случаях — удаление для слияния ничем не отличается от правки.
+    //
+    // Два случая, когда писать не нужно, и оба важны именно для слияния:
+    //   — текст не изменился: иначе updatedAt двигался бы на каждое открытие
+    //     правки, и пустое открытие «побеждало» бы чужую настоящую правку;
+    //   — записи не было и текст пуст: правку открыли и закрыли, не набрав
+    //     ничего. Надгробие в дне, где заметки никогда не было, засоряло бы
+    //     хранилище, а при слиянии его свежая отметка стёрла бы заметку,
+    //     написанную в этот день на другом устройстве.
+    var prev = notes[noteEditingKey];
+    var changed = prev ? (prev.text !== text) : !!text;
+    if(changed){
+      notes[noteEditingKey] = { text: text, updatedAt: new Date().toISOString() };
+      saveNotes();
+    }
     return had !== !!text;
   }
 
@@ -2240,7 +2314,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function startNoteEdit(){
     if(!filters.date) return;
     noteEditingKey = filters.date;
-    el.noteInput.value = notes[filters.date] || '';
+    el.noteInput.value = noteText(filters.date);
     renderNote();
     el.noteInput.focus();
     // Курсор в конец: заметку чаще дописывают, чем переписывают.
@@ -2258,9 +2332,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function deleteNote(dateKey){
     if(!dateKey) return;
-    var had = !!notes[dateKey];
-    delete notes[dateKey];
-    saveNotes();
+    var had = !!noteText(dateKey);
+    // Запись не стирается, а превращается в надгробие — см. commitNote.
+    // Надгробие ставится, только если было что удалять: «Удалить» в правке
+    // доступна и на дне без заметки, и там ей делать нечего.
+    if(notes[dateKey]){
+      if(had) notes[dateKey] = { text: '', updatedAt: new Date().toISOString() };
+      saveNotes();
+    }
     if(noteEditingKey === dateKey){
       if(noteSaveTimer){ clearTimeout(noteSaveTimer); noteSaveTimer = null; }
       noteEditingKey = null;
@@ -2292,7 +2371,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
 
     el.noteEdit.classList.remove('visible');
-    var text = notes[filters.date] || '';
+    var text = noteText(filters.date);
     el.noteBlock.style.display = 'flex';
     el.noteBlock.classList.toggle('filled', !!text);
     el.noteBlock.classList.toggle('empty', !text);
@@ -2576,7 +2655,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(filters.date===dateKey) cell.classList.add('selected');
       // Уголок заметки — как и рамка, признак самого дня, а не результата
       // отбора: заметка либо написана, либо нет, фильтры на это не влияют.
-      if(notes[dateKey]) cell.classList.add('has-note');
+      if(noteText(dateKey)) cell.classList.add('has-note');
 
       // The strip earns its place only on a working weekday that turns out to
       // be non-working. On a Saturday or Sunday it would state the obvious,
