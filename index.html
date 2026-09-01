@@ -3404,6 +3404,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     pendingLoad = null;
   }
   function askClearData(){
+    // Как и с заменой: пара «спрошено» без «очищено» показывает, что человек
+    // передумал, и молчание приложения объясняется.
+    logEvent('расписание', 'очистка спрошена', { занятий: events.length });
     askConfirm('Очистить все данные?',
       'Загруженное расписание будет удалено из этого браузера.',
       'Очистить', clearAllData);
@@ -3681,6 +3684,63 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
            p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' ' +
            sign + p(Math.floor(off / 60)) + ':' + p(off % 60);
+  }
+
+  /* Сведения о среде — одной записью при запуске.
+
+     Каждая строчка здесь отвечает на вопрос, на который иначе ответить нечем.
+
+     версия — время сборки самого файла. Мы дважды напарывались на то, что
+     браузер отдаёт старый код: без этой отметки «не работает» невозможно
+     отличить от «работает, но у него прежняя версия». Ручной нумерации не
+     нужно, дату файла браузер знает сам.
+
+     приложение — установлено на устройство или открыто вкладкой. От этого
+     зависит, действует ли семидневный срок, после которого Safari стирает
+     данные сайта. Первый вопрос при жалобе на пропавшие заметки.
+
+     sw — управляет ли страницей service worker. Вместе с версией закрывает
+     вопрос «а не прежний ли код он смотрит».
+
+     сеть — половина жалоб на несохранившиеся копии объясняется этим словом.
+
+     Ширина экрана — для жалоб на раскладку: она у нас разная до и после
+     861 пикселя. Ни модели устройства, ни строки браузера не пишем: они
+     длинные, опознают человека и ничего к делу не добавляют. */
+  function logEnvironment(){
+    var версия = 'неизвестна';
+    try{
+      var d = new Date(document.lastModified);
+      if(!isNaN(d.getTime())){
+        var p = function(n){ return (n < 10 ? '0' : '') + n; };
+        версия = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+                 ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+      }
+    }catch(e){}
+    var standalone = false;
+    try{
+      standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+                   navigator.standalone === true;
+    }catch(e){}
+    logEvent('запуск', 'среда', {
+      версия: версия,
+      приложение: standalone ? 'установлено' : 'вкладка',
+      sw: (navigator.serviceWorker && navigator.serviceWorker.controller) ? 'управляет' : 'нет',
+      сеть: (navigator.onLine === false) ? 'нет' : 'есть',
+      ширина: window.innerWidth || 0
+    });
+    // Занятое место спрашивается отдельно: ответ приходит с задержкой, а
+    // задерживать из-за него запуск незачем. Пригождается он ровно тогда,
+    // когда рядом стоит «хранилище · запись не удалась».
+    try{
+      if(navigator.storage && navigator.storage.estimate){
+        navigator.storage.estimate().then(function(e){
+          if(!e) return;
+          var кб = function(n){ return Math.round((n || 0) / 1024); };
+          logEvent('запуск', 'место', { занято: кб(e.usage) + 'КБ', всего: кб(e.quota) + 'КБ' });
+        }, function(){});
+      }
+    }catch(e){}
   }
 
   function logDetail(d){
@@ -4496,15 +4556,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     if(!events.length) return;
     saveSyncState({ lastResult: { ok: null, kind: 'идёт запись', at: new Date().toISOString() } });
+    // Отказ через двести миллисекунд и отказ через тридцать секунд — разные
+    // болезни: первое похоже на отозванный доступ, второе на умирающую связь.
+    var начато = Date.now();
     syncSaveSchedule().then(function(r){
       saveSyncState({ lastResult: { ok: true, name: r.name, replaced: r.replaced,
                                     at: new Date().toISOString() } });
       // Имя копии — это только период, персональных данных в нём нет.
       logEvent('копия', 'сохранена', { файл: r.name, занятий: r.count,
-                                       убрано: r.replaced, предупреждения: r.warn });
+                                       убрано: r.replaced, предупреждения: r.warn,
+                                       мс: Date.now() - начато });
     }, function(err){
       saveSyncState({ lastResult: { ok: false, kind: err.kind, at: new Date().toISOString() } });
-      logEvent('копия', 'не сохранилась', err.kind);
+      logEvent('копия', 'не сохранилась', { причина: err.kind, мс: Date.now() - начато });
       scheduleLogSync();
       // auth и notFound повторять бессмысленно — они сами не пройдут, и
       // отметка о недосланной копии только вводила бы в заблуждение.
@@ -4556,8 +4620,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       showNoData();
       renderShell();
     }
+    // Число заметок здесь не для красоты: падение с десятка до нуля между
+    // двумя запусками — это Safari, стерший данные сайта за неделю простоя.
+    // Без счётчика оно неотличимо от «человек сам удалил».
     logEvent('запуск', 'открыто', { занятий: events.length,
+      заметок: Object.keys(notes).length,
       синхронизация: syncAvailable() ? 'есть' : 'нет' });
+    logEnvironment();
     // Копия, не уехавшая в прошлый раз из-за отсутствия сети, досылается
     // здесь — после того, как расписание уже на экране. Тихо: человек не
     // просил её сейчас, и запуск приложения задерживать нечем.
