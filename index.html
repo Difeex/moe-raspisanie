@@ -548,9 +548,14 @@
   /* Кегль меньше всего остального в панели: счётчик — служебная пометка, а не
      содержание. line-height:1 обязателен — иначе строка распирает промежуток
      между управлением и списком. */
+  /* Счётчик сидит на своей подложке, а не просто висит в разрыве линии: так
+     он читается как отдельная пометка на панели, а не как обрывок черты.
+     Фон — серый с прозрачностью, а не сплошной цвет под панель: панель сама
+     полупрозрачна, и сплошная заливка под неё не подбирается. */
   .divider-count{
     font-size:11.5px;font-weight:700;line-height:1;color:var(--text-faint);
     white-space:nowrap;letter-spacing:.02em;
+    background:rgba(31,41,55,0.05);border-radius:7px;padding:4px 8px;
   }
   /* Без счётчика черта ведёт себя как прежде: сплошная линия нулевой высоты,
      с полями 6px, которые вместе с 14px промежутка панели дают привычные 20px
@@ -2639,23 +2644,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var total = events.length;
     var text = '';
     if(total){
-      var shown = getFilteredEvents().length;
-      // Пока ничего не отобрано, «12 из 83» превратилось бы в «83 из 83» —
-      // строка без смысла. Тогда называется просто объём расписания.
-      text = anyFilterActive()
-        ? shown + ' из ' + total
-        : total + ' ' + plural(total, 'занятие', 'занятия', 'занятий');
+      // Формат один на все случаи — «сколько показано из скольких». Без
+      // фильтров это «83 из 83»: число к числу читается ровнее, чем подмена
+      // формулировки, и глазу не приходится разбирать, какая из них сейчас.
+      text = getFilteredEvents().length + ' из ' + total;
     }
     el.listCount.textContent = text;
     el.listDivider.classList.toggle('has-count', !!text);
   }
 
-  // «Фильтр включён» — это любое из условий отбора, включая выбранную дату и
-  // строку поиска: счётчик показывает результат их совместного действия.
-  function anyFilterActive(){
-    return !!filters.date || !!filters.search ||
-           filters.workTypes.size > 0 || filters.modes.size > 0 || filters.streams.size > 0;
-  }
 
   // Короткая дата для строки сведений: ДД.ММ.ГГ.
   function formatShortDate(dateKey){
