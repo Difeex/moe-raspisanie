@@ -764,6 +764,20 @@
      сжатию неоткуда взяться. */
   .scroll-filters .cf-list.cf-nowrap{flex-wrap:nowrap}
   .scroll-filters .cf-chip.cf-shrink{min-width:0;flex-shrink:1}
+  /* У чипа даты сжатие имеет предел. Обрезка идёт по ширине, и без него от
+     «Чт, 24 сент.» оставалось «Чт, 1…» — то есть пропадало само число, ради
+     которого чип и стоит первым. 76px — ширина самого широкого написания дня с
+     числом и многоточием («Пн, 24…»), замерено вшитым шрифтом, поэтому предел
+     не поплывёт на чужой машине.
+     Больше этого числа брать нельзя: в самом плотном случае строка занята
+     датой, счётчиком «ещё N» и кнопкой «Сбросить», и на дату остаётся ровно
+     столько. */
+  .scroll-filters .cf-chip.cf-shrink.cf-date{min-width:76px}
+  /* Предел даты уступает кнопке. Если строка не помещается даже с ним, лучше
+     обрезать дату сильнее, чем выпустить «Сбросить» за край панели: без
+     кнопки снять фильтры отсюда нельзя вовсе, а дата и урезанная остаётся
+     подсказкой — полная лежит в подсказке чипа. */
+  .scroll-filters .cf-chip.cf-shrink.cf-date.cf-tight{min-width:0}
   /* Счётчик не сжимается никогда. При запрете переноса у чипов снимается запрет
      на сжатие (overflow:hidden обнуляет min-width:auto), и «ещё 8» съезжало в
      «ещ…» — обрезанный счётчик теряет ровно то, ради чего существует, число. */
@@ -3022,7 +3036,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var dayName = sameDay ? sameDay.day : weekdayShort(d);
       // В самом чипе месяц короткий, в подсказке — полный: сокращение экономит
       // ширину, а не прячет сведения.
-      parts.push({ text: formatDayHeadingShort(d, dayName), full: formatDayHeading(d, dayName) });
+      // kind помечает дату для чипа: у неё свой предел сжатия, и отличать её
+      // по месту в перечислении ненадёжно — порядок задаётся здесь же и может
+      // измениться.
+      parts.push({ kind: 'date', text: formatDayHeadingShort(d, dayName), full: formatDayHeading(d, dayName) });
     }
     WORK_ORDER.forEach(function(b){
       if(filters.workTypes.has(b)) parts.push(WORK_META[b].label);
@@ -3070,7 +3087,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     container.innerHTML = '';
     parts.forEach(function(p){
       var chip = document.createElement('span');
-      chip.className = 'cf-chip';
+      chip.className = 'cf-chip' + (p.kind === 'date' ? ' cf-date' : '');
       chip.textContent = p.text;
       // В подсказке — полный текст: и когда его обрезало правило по символам,
       // и когда обрезала ширина экрана.
@@ -3146,7 +3163,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var more = list.querySelector('.cf-more');
     if(more) more.parentNode.removeChild(more);
     list.classList.remove('cf-nowrap');
-    chips.forEach(function(c){ c.style.display = ''; c.classList.remove('cf-shrink'); });
+    chips.forEach(function(c){ c.style.display = ''; c.classList.remove('cf-shrink'); c.classList.remove('cf-tight'); });
 
     // Вылезшим считается элемент, оказавшийся ниже первой строки.
     function wrapped(){
@@ -3188,6 +3205,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // ему ужаться: начало запроса читается, остальное уходит в многоточие.
     list.classList.add('cf-nowrap');
     chips[0].classList.add('cf-shrink');
+    // У чипа даты сжатие ограничено снизу, чтобы день и число не пропали. Но
+    // предел этот мягкий: если строка не влезает даже с ним, за край уходит
+    // «Сбросить», а без неё снять фильтры отсюда нечем. В таком случае предел
+    // снимается — дата обрежется сильнее, полная останется в подсказке.
+    // Проверяем не scrollWidth (он округляется и срабатывал всегда), а само
+    // положение кнопки: удержать надо именно её.
+    var resetBtn = list.querySelector('.cf-reset');
+    if(resetBtn &&
+       resetBtn.getBoundingClientRect().right > list.getBoundingClientRect().right + 1){
+      chips[0].classList.add('cf-tight');
+    }
   }
 
   function updateScrollFilters(){
