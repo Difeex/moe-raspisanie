@@ -4944,40 +4944,34 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      приложение остаётся при своём. */
   /* Что записать в файл, не трогая приложение.
 
-     От сведения отличается тем, что спорные дни не решаются вовсе: в файле
-     остаётся чужое, у нас на экране своё, и оба дожидаются человека. Решить
-     спор в фоне значило бы стереть текст, которого никто не видел. */
+     Спорные дни — когда в один день писали с обеих сторон, не видя друг
+     друга, — решаются здесь же, по времени правки: побеждает та, что написана
+     позже. Никаких вопросов человеку и никакого откладывания.
+
+     Так решено намеренно, и цена названа: заметка, проигравшая по времени,
+     из файла уходит. Обмен на это — приложение, в котором нет ни одного
+     диалога про слияние, и одна кнопка вместо трёх. Спорные дни записываются
+     в журнал, так что разобрать потом, что произошло, всё равно можно. */
   function pushMerge(remote){
-    var base = readNotesBase(), out = {}, отложено = [], k;
-    for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) out[k] = remote[k];
-
-    var сведение = threeWay(base, notes, remote);
-    сведение.conflicts.forEach(function(c){ отложено.push(c.date); });
-
-    Object.keys(сведение.notes).forEach(function(k){
-      var спорный = отложено.indexOf(k) !== -1;
-      if(спорный) return;                 // спорное оставляем как есть у них
-      out[k] = сведение.notes[k];
-    });
-    // Удаление, сделанное здесь, из файла убирается — но только если спора нет.
-    Object.keys(remote).forEach(function(k){
-      if(!сведение.notes[k] && отложено.indexOf(k) === -1) delete out[k];
-    });
-    return { out: out, отложено: отложено };
+    var сведение = threeWay(readNotesBase(), notes, remote);
+    if(сведение.conflicts.length){
+      // В журнал идут только даты: тексты заметок туда не попадают никогда.
+      logEvent('notes', 'same day both sides',
+        { days: сведение.conflicts.map(function(c){ return c.date; }).join(',') });
+    }
+    return сведение.notes;
   }
 
   function syncPushNotes(opts){
     if(!syncAvailable()) return Promise.reject(syncError('auth'));
-    var записано = null, отложено = [];
+    var записано = null;
     return updateFile(NOTES_FILE, 'Заметки к дням', function(current){
       var remote = {};
       if(current){
         try{ remote = validNotes(JSON.parse(current)); }
         catch(e){ /* нечитаемое содержимое замещается нашим */ }
       }
-      var разбор = pushMerge(remote);
-      записано = разбор.out;
-      отложено = разбор.отложено;
+      записано = pushMerge(remote);
       var text = JSON.stringify(записано, null, 1);
       // Совпало — не пишем вовсе. Без этого каждое открытие приложения давало
       // бы коммит в чужом хранилище на ровном месте.
@@ -4989,13 +4983,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
          можно только то, что действительно сошлось.
 
          День записан в файл ровно тем, что лежит у нас, — сошлись, помним.
-         Разошлись — не помним, каким бы ни был файл. Разойтись они могут по
-         двум причинам, и обе важны.
-
-         Спорный день мы не тронули: в файле чужое, у нас своё. Запиши сюда
-         чужое — и при сведении спор пропадёт: выйдет, что чужое известно, а
-         раз наше новее, то оно и правее. Человек не узнает, что была вторая
-         заметка.
+         Разошлись — не помним, каким бы ни был файл.
 
          Удаление, сделанное на другом устройстве, мы записью применили к
          файлу, но не к себе: приложение трогать нельзя, вниз тянут только по
@@ -5048,37 +5036,37 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
       var base = readNotesBase();
       var сведение = threeWay(base, notes, remote);
-      var споры = сведение.conflicts, чужаяПравка = '';
+      var чужаяПравка = '';
       Object.keys(remote).forEach(function(k){
         if(remote[k].updatedAt > чужаяПравка) чужаяПравка = remote[k].updatedAt;
       });
-      // incoming — что приедет сюда, outgoing — что уедет отсюда. Спорные дни
-      // в них не входят: они не приедут и не уедут, пока человек не решит.
+      // incoming — сколько заметок появится, изменится и исчезнет здесь после
+      // нажатия кнопки. Больше интерфейсу ничего не нужно: спрашивать человека
+      // не о чем, разбирать нечего.
       var incoming = сведение.added + сведение.updated + сведение.deleted;
       var outgoing = 0;
       Object.keys(notes).forEach(function(k){
-        if(споры.some(function(c){ return c.date === k; })) return;
         if(!sameNote(base[k], notes[k]) && sameNote(base[k], remote[k])) outgoing++;
       });
       Object.keys(base).forEach(function(k){
         if(!notes[k] && remote[k] && sameNote(base[k], remote[k])) outgoing++;
       });
       return { incoming: incoming, outgoing: outgoing,
-               conflicts: споры.length, conflictDays: споры,
                remoteChangedAt: чужаяПравка || null };
     });
   }
 
-  /* ---- путь вниз: только по явному действию человека ----
+  /* ---- путь вниз: одна кнопка «Синхронизировать» ----
 
-     Это та самая кнопка «свести заметки». Здесь, и только здесь, заметки из
-     хранилища попадают в приложение.
+     Здесь, и только здесь, заметки из хранилища попадают в приложение.
 
-     Слияние то же самое, по отметке времени: заметка, написанная позже,
-     побеждает; надгробие тоже побеждает, если оно новее, — стёртое на телефоне
-     не воскресает на компьютере. После слияния объединённое состояние уезжает
-     обратно, чтобы файл и приложение сошлись. */
-  function syncPullNotes(){
+     Одно действие на всё: забрать чужое, свести со своим, отправить
+     объединённое обратно. Никаких вопросов по дороге — если в один день
+     писали с обеих сторон, побеждает написанная позже.
+
+     Удаление при этом не воскресает: слепок последнего обмена помнит, что
+     заметка была, и отличает «её стёрли» от «её там ещё не завели». */
+  function syncNotes(){
     if(!syncAvailable()) return Promise.reject(syncError('auth'));
     return readFile(NOTES_FILE).then(function(file){
       var remote = {};
@@ -5094,7 +5082,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       saveNotesBase(remote);
       renderCalendar();
       renderNote();
-      logEvent('notes', 'pulled', { added: m.added, updated: m.updated, deleted: m.deleted });
+      logEvent('notes', 'synced', { added: m.added, updated: m.updated, deleted: m.deleted });
       scheduleLogSync();
       // Наружу уходят только счётчики: сами заметки интерфейс читает из
       // приложения, и отдавать ему тот же объект вторым путём незачем.
