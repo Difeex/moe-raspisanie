@@ -4921,6 +4921,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var path = SNAPSHOT_DIR + '/' + name;
     var snap = buildSnapshot(events, meta, period);
     var body = snapshotBody(snap);
+    /* Число занятий запоминается здесь, вместе со снимком, а не читается в
+       конце из events.
+
+       Запись идёт секунды — на живом хранилище от трёх до пяти, — и за это
+       время человек успевает нажать «Очистить». Тогда в конце events уже
+       пуст, и журнал сообщал «сохранена копия, занятий 0», хотя в файле
+       лежали все 38. Данные при этом были целы: снимок собран строкой выше.
+       Врал только отчёт, и разбираться по такому журналу было бы мучительно. */
+    var занятий = snap.events.length;
 
     /* Копия замещает прежнюю целиком — сливать тут нечего, в отличие от
        заметок. Но пройти через updateFile всё равно нужно: он добывает sha и
@@ -4946,7 +4955,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return cleanupPeriod(period, name);
     }).then(function(removed){
       saveSyncState({ lastSyncAt: new Date().toISOString(), pendingSnapshot: null });
-      return { name: name, period: period, count: events.length,
+      return { name: name, period: period, count: занятий,
                warn: warn, replaced: removed };
     });
   }
