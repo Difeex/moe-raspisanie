@@ -586,42 +586,16 @@
     clip-path:polygon(0 0, 100% 0, 100% 100%);
   }
 
-  /* Phone-only: on a narrow screen the calendar and the filter chips live on
-     separate tabs, so dimmed strips are the only hint that anything is filtered.
-     This summary names the active filters right under the grid. On desktop both
-     panels are visible at once and it would just repeat the chips. */
-  /* Spacing above and below the rule equals the panel's own padding (20px),
-     the same gap the outer cells keep from the panel edge. The panel already
-     puts a 14px row-gap above this block, so the margin only tops it up. */
-  .calendar-filters{
-    display:none;flex-direction:column;
-    margin-top:6px;padding-top:20px;border-top:1px solid var(--border-soft);
-    /* Черта идёт от края до края панели: отрицательные поля выводят блок за её
-       внутренний отступ, а такое же внутреннее возвращает содержимое на прежнее
-       место — чипы остаются выровненными по сетке календаря выше.
-       21px, а не 20: у панели, кроме отступа в 20px, есть ещё рамка в 1px,
-       и без её учёта линия не дотягивалась до края по пикселю с каждой стороны. */
-    margin-left:-21px;margin-right:-21px;padding-left:21px;padding-right:21px;
-    /* Вторая линия встык под первой — светлая, тем же цветом, что обводка
-       панели. Тёмная сверху и светлая снизу читаются как фаска: будто линию
-       процарапали в поверхности, а не нарисовали на ней.
-       Внутренняя тень, а не ещё одна рамка: она ложится ровно под border-top,
-       без зазора, и не влияет на раскладку. */
-    box-shadow:inset 0 1px 0 var(--border);
-  }
-  @media (max-width:860px){ .calendar-filters.visible{display:flex} }
-
-  /* Та же процарапанная фаска, что под фильтрами в календаре, только
-     самостоятельной чертой: тёмная линия сверху, светлая встык под ней.
+  /* Процарапанная фаска: тёмная линия сверху, светлая встык под ней — будто
+     линию продавили в поверхности, а не нарисовали на ней.
      Поля -21px выводят черту за внутренний отступ панели, чтобы она шла от
      края до края (20px отступа плюс 1px рамки).
      По 6px сверху и снизу добавляются к 14px, которые панель и так держит
-     между своими детьми: получается те же 20px воздуха с обеих сторон, что и
-     у черты в календаре. Собственной высоты у элемента нет — только рамка.
-     Тень здесь внешняя, а не inset, как у календаря: внутрь класть её некуда —
-     при нулевой высоте у блока нет площади, на которой она бы нарисовалась, и
-     светлая половина фаски просто пропадала. Снаружи она ложится ровно под
-     тёмной линией, то есть туда же, куда и в календаре. */
+     между своими детьми: получаются 20px воздуха с обеих сторон — тот же
+     отступ, что панель хранит от своего края. Собственной высоты у элемента
+     нет — только рамка.
+     Тень внешняя, а не inset: при нулевой высоте внутри блока нет площади, на
+     которой она бы нарисовалась, и светлая половина фаски просто пропадала. */
   .panel-divider{
     display:none;flex:none;align-items:center;gap:8px;margin:0 -21px;
   }
@@ -1335,8 +1309,8 @@
     .credit{grid-column:1;font-size:clamp(12px, calc(3.3vw - 0.92px), 14px)}
     .search-wrap{min-width:140px}
 
-    /* Чипы фильтров ужимаются до размера чипов сводки под календарём: кегль
-       12.5px, поля 5x9 вместо 8x14, высота 26.5px вместо 34. На узком экране
+    /* Чипы фильтров ужимаются до размера чипов пересказа в плавающей панели:
+       кегль 12.5px, поля 5x9 вместо 8x14, высота 26.5px вместо 34. На узком экране
        полоса фильтров занимала непозволительно много — четыре вида работ,
        два формата и «+ Поток» разбредались на три ряда.
 
@@ -1353,7 +1327,7 @@
        единственным носителем цвета — теперь цвет виден только в полосках
        календаря и в выбранном состоянии чипа. И цель для пальца становится
        26.5px вместо привычных 44: расширить её невидимой областью, как у
-       «Сбросить» в сводке, здесь нельзя — там соседи не нажимаются, а тут
+       «Сбросить» в плавающей панели, здесь нельзя — там соседи не нажимаются, а тут
        нажимаются все и стоят вплотную, соседи начали бы перехватывать.
 
        Плюс у «+ Поток» оставлен: он не сообщает вид занятия, а показывает,
@@ -1491,13 +1465,6 @@
           <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span>
         </div>
         <div class="calendar-grid" id="calendarGrid"></div>
-        <!-- Заголовка нет намеренно: подпись «Фильтры:» занимала целую строку,
-             ничего не сообщая сверх того, что и так ясно из самих чипов и
-             кнопки сброса рядом. Для тех, кто не видит экрана, смысл несёт
-             aria-label. -->
-        <div class="calendar-filters" id="calendarFilters" aria-label="Действующие фильтры">
-          <div class="cf-list" id="calendarFiltersList"></div>
-        </div>
       </section>
       <div class="legend" id="legend"></div>
     </div>
@@ -2051,7 +2018,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
-     'calendarFilters','calendarFiltersList',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
      'dateChip','dateChipLabel','listDivider','listCount','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn',
      'noteBlock','noteBody','noteDelete','noteEdit','noteInput','noteDeleteEdit','noteDone'
@@ -2961,13 +2927,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       el.calendarGrid.appendChild(cell);
     }
 
-    renderCalendarFilters();
+    // Пересказ фильтров обновляется отсюда: он меняется вместе с тем, что
+    // календарь показывает приглушённым.
+    renderScrollFilters();
   }
 
   // Названия действующих фильтров — в том же порядке, в каком они стоят в
   // панели фильтров, чтобы перечисление читалось как её краткий пересказ.
-  // Один источник на оба места, где фильтры пересказываются (блок под
-  // календарём и плавающая панель над списком): расходиться им нельзя.
+  // Потребитель один — плавающая панель над списком. Был и второй, блоком
+  // под календарём, но он пересказывал полосу фильтров, видимую на 86px
+  // ниже него, и убран.
   function activeFilterParts(){
     var parts = [];
     // Дата идёт первой: кнопка «Сбросить» в конце ряда снимает и её тоже, а
@@ -3047,21 +3016,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
   }
 
-  function renderCalendarFilters(){
-    var parts = activeFilterParts();
-    fillFilterChips(el.calendarFiltersList, parts, 'calendarReset');
-    // Блок появляется только вместе с фильтрами: сбрасывать нечего, когда
-    // ни один не выбран.
-    el.calendarFilters.classList.toggle('visible', parts.length > 0);
-    renderScrollFilters(parts);
-  }
-
   // ---------- плавающая панель фильтров над списком ----------
   // Список бывает высотой в девять тысяч пикселей, и панель фильтров уезжает
   // вверх сразу же. Прокрутив список, пользователь перестаёт видеть, по каким
   // условиям он отобран — а это как раз то, что нужно помнить при чтении.
-  // Панель появляется, когда настоящая панель фильтров ушла за верх экрана,
-  // и повторяет тот же пересказ, что и блок под календарём.
+  // Панель появляется, когда настоящая полоса фильтров ушла за верх экрана:
+  // пересказ нужен там, где самих фильтров не видно, и только там.
   var scrollFiltersParts = [];
   // Отпечаток состояния, при котором сворачивание считалось в последний раз.
   // Пересчитывать на каждый кадр прокрутки нельзя — замеры вызывают
@@ -3788,11 +3748,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.resetFilters.addEventListener('click', resetAll);
     el.emptyResetBtn.addEventListener('click', resetAll);
     // Делегирование: чип сброса пересоздаётся при каждой перерисовке, а сам
-    // список — нет. Вкладку не трогаем: пользователь нажал кнопку в календаре
-    // и должен остаться в календаре.
-    el.calendarFiltersList.addEventListener('click', function(ev){
-      if(ev.target.closest('.cf-reset')) resetAll();
-    });
+    // список — нет.
     el.scrollFiltersList.addEventListener('click', function(ev){
       if(ev.target.closest('.cf-reset')) resetAll();
     });
