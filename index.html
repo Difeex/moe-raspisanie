@@ -3535,6 +3535,30 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(f) handleFile(f);
     });
 
+    // Файл, отпущенный мимо зоны, не должен делать ничего. Своего обработчика
+    // на окне не было, и срабатывало поведение браузера по умолчанию: он
+    // открывал или скачивал файл, уводя человека со страницы. Загрузить
+    // расписание так было нельзя и раньше, но промах всё-таки что-то делал —
+    // и это расходилось с правилом «только через зону или кнопку».
+    // Здесь ничего не грузится, только отменяется поведение браузера. Событие
+    // над самой зоной пропускается: она обрабатывает его сама, и вмешиваться
+    // в её работу отсюда незачем.
+    // dropEffect:'none' — чтобы отказ был виден заранее: курсор показывает
+    // «сюда нельзя» ещё до того, как человек разожмёт кнопку, а не молча
+    // проглатывает файл, оставляя гадать, сработало или нет.
+    function outsideDropzone(target){
+      return !(el.dropzone && el.dropzone.contains(target));
+    }
+    window.addEventListener('dragover', function(e){
+      if(!outsideDropzone(e.target)) return;
+      e.preventDefault();
+      if(e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+    });
+    window.addEventListener('drop', function(e){
+      if(!outsideDropzone(e.target)) return;
+      e.preventDefault();
+    });
+
     el.prevMonth.addEventListener('click', function(){ shiftMonth(-1); renderCalendar(); });
     el.nextMonth.addEventListener('click', function(){ shiftMonth(1); renderCalendar(); });
     el.todayBtn.addEventListener('click', function(){
