@@ -1868,11 +1868,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // На распознавание это не влияет — bucketWorkType по-прежнему относит сюда
     // и «экзамен», если он когда-нибудь появится, но покажет его как зачёт.
     exam:    {label:'Зачёт', color:'var(--exam)', line:'var(--exam-line)', bg:'var(--exam-soft)', icon:ICONS.exam},
-    other:   {label:'Другое', color:'var(--other)', line:'var(--other-line)', bg:'var(--other-soft)', icon:ICONS.other}
+    other:   {label:'Другое', color:'var(--other)', line:'var(--other-line)', bg:'var(--other-soft)', icon:ICONS.other},
+    /* Вид не заполнен в выгрузке. Ни в WORK_ORDER, ни в списке форматов таких
+       записей нет — значит ни чипа фильтра, ни пункта легенды они не создают.
+       Описание нужно только для показа: карточка и полоска в календаре берут
+       цвет и подпись отсюда, и без записи они бы просто упали.
+       Значка нет намеренно: пустое значение нечем изображать, а кружок с
+       восклицательным знаком уже занят «Другим». */
+    none:    {label:'Вид не указан', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)', icon:''}
   };
   var MODE_META = {
     online: {label:'Онлайн', icon:ICONS.online, color:'var(--mode)', line:'var(--border-hover)', bg:'var(--mode-soft)'},
-    onsite: {label:'Очно', icon:ICONS.onsite, color:'var(--mode)', line:'var(--border-hover)', bg:'var(--mode-soft)'}
+    onsite: {label:'Очно', icon:ICONS.onsite, color:'var(--mode)', line:'var(--border-hover)', bg:'var(--mode-soft)'},
+    /* Место проведения не заполнено — см. WORK_META.none, устроено так же. */
+    none:   {label:'Формат не указан', icon:'', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)'}
   };
   var WORK_ORDER = ['lecture','seminar','exam','other'];
   var MONTHS_NOM = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -2062,6 +2071,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   // Код корпуса решает всё; текст смотрим, только если кода нет.
   function detectMode(venue){
+    // Место проведения не заполнено вовсе — ни кода, ни текста. Прежде такое
+    // занятие молча становилось очным: формат приписывался ему на пустом
+    // месте, и человек видел в фильтре «Очно» то, чего в выгрузке не было.
+    if(!venue.code && !venue.room) return 'none';
     if(venue.code) return venue.code === ONLINE_CODE ? 'online' : 'onsite';
     var t = venue.room.toLowerCase();
     for(var i=0;i<ONLINE_WORDS.length;i++){
@@ -2131,6 +2144,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return dayShort+', '+dateObj.getUTCDate()+' '+MONTHS_GEN[dateObj.getUTCMonth()];
   }
   function bucketWorkType(text){
+    // Пустая ячейка — не «Другое». «Другое» значит «вид есть, но незнакомый»,
+    // и по нему можно отобрать; здесь отбирать не по чему, атрибута нет вовсе.
+    // strOrEmpty выше уже срезал пробелы, поэтому строка из одних пробелов
+    // приходит сюда пустой и попадает в ту же ветку.
+    if(!text) return 'none';
     var t = text.toLowerCase();
     if(t.indexOf('лекц')!==-1) return 'lecture';
     if(t.indexOf('семинар')!==-1) return 'seminar';
@@ -2217,6 +2235,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // 90, так что 120 разделяет эти случаи с запасом в обе стороны.
   var OUTLIER_GAP_DAYS = 120;
   var OUTLIER_MAX_LESSONS = 3;
+  // Сколько занятий нельзя отобрать ни одним фильтром своей группы, потому что
+  // в выгрузке соответствующая ячейка пуста. Занятие считается один раз, даже
+  // если у него не хватает сразу нескольких признаков: человеку важно, у
+  // скольких занятий есть эта беда, а не сколько всего дырок в таблице.
+  // Поток сюда включён: он тоже отбирает, и пустая группа так же выводит
+  // занятие из-под фильтра.
+  function countWithoutAttrs(list){
+    var n = 0;
+    list.forEach(function(e){
+      if(e.workTypeBucket === 'none' || e.mode === 'none' || !e.streamTags.length) n++;
+    });
+    return n;
+  }
+
   function findDateOutliers(list){
     if(list.length < 4) return [];
     var byDate = {};
@@ -2308,7 +2340,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
       if(!parsed.length) throw new Error('В файле не найдено ни одного занятия. Повторите загрузку с другим файлом расписания.');
       var newMeta = { fileName:file.name, uploadedAt:new Date().toISOString(), count:parsed.length,
-                      skipped:skipped, outliers:findDateOutliers(parsed) };
+                      skipped:skipped, outliers:findDateOutliers(parsed),
+                      noAttrs:countWithoutAttrs(parsed) };
       // Confirmation comes after a successful parse, not before: a file that
       // cannot be read never gets to threaten the schedule already loaded.
       if(events.length){
@@ -2348,7 +2381,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     meta = newMeta;
     // Только здесь, не в afterDataLoaded(): отчёт о потерях относится к самой
     // загрузке. Всплывать при каждом открытии приложения он не должен.
-    showLoadNotice(newMeta.skipped, newMeta.outliers);
+    showLoadNotice(newMeta.skipped, newMeta.outliers, newMeta.noAttrs);
     // A freshly loaded file may not share the previous file's work types,
     // streams or dates — stale filters would otherwise silently hide
     // everything with no visible cue why the list looks empty.
@@ -3126,7 +3159,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return String(a).toLowerCase().replace(/ё/g,'е') === String(b).toLowerCase().replace(/ё/g,'е');
     };
     var typeTitle = wm.label + (e.workTypeText && !sameWord(e.workTypeText, wm.label) ? ' ('+e.workTypeText+')' : '');
-    var modeTitle = e.mode==='online' ? 'Онлайн' : (e.building ? 'Очно — '+e.building : 'Очно');
+    // Подпись берётся из описания формата, а не выбирается перечислением:
+    // раньше всё, что не «онлайн», объявлялось очным — и незаполненное место
+    // проведения тоже.
+    var modeTitle = e.mode === 'onsite' && e.building ? 'Очно — ' + e.building : mm.label;
 
     var tagsHtml = '';
     if(e.room) tagsHtml += '<span class="tag">'+escapeHtml(e.room)+'</span>';
@@ -3182,8 +3218,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         '<div class="event-title-row">'+
           '<div class="event-title">'+escapeHtml(e.discipline)+'</div>'+
           '<div class="event-icons">'+
-            '<span class="type-icon'+(typeActive?'':' dim')+'" data-bucket="'+e.workTypeBucket+'" style="--icon-color:'+wm.color+';--icon-bg:'+wm.bg+'" title="'+escapeHtml(typeTitle)+'">'+wm.icon+'</span>'+
-            '<span class="mode-icon'+(modeActive?'':' dim')+'" data-mode="'+e.mode+'" style="--icon-color:'+mm.color+';--icon-bg:'+mm.bg+'" title="'+escapeHtml(modeTitle)+'">'+mm.icon+'</span>'+
+            (wm.icon ? '<span class="type-icon'+(typeActive?'':' dim')+'" data-bucket="'+e.workTypeBucket+'" style="--icon-color:'+wm.color+';--icon-bg:'+wm.bg+'" title="'+escapeHtml(typeTitle)+'">'+wm.icon+'</span>' : '')+
+            (mm.icon ? '<span class="mode-icon'+(modeActive?'':' dim')+'" data-mode="'+e.mode+'" style="--icon-color:'+mm.color+';--icon-bg:'+mm.bg+'" title="'+escapeHtml(modeTitle)+'">'+mm.icon+'</span>' : '')+
           '</div>'+
         '</div>'+
         '<div class="event-tags">'+tagsHtml+'</div>'+
@@ -3432,53 +3468,59 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.loadNoticeList.appendChild(ul);
   }
 
-  function showLoadNotice(skipped, outliers){
+  function showLoadNotice(skipped, outliers, noAttrs){
     skipped = skipped || [];
     outliers = outliers || [];
-    if(!skipped.length && !outliers.length) return hideLoadNotice();
+    noAttrs = noAttrs || 0;
+    if(!skipped.length && !outliers.length && !noAttrs) return hideLoadNotice();
 
     el.loadNoticeList.innerHTML = '';
-    // Заголовок общий, когда замечаний два вида: перечислять их в одной фразе
-    // получилось бы длинно, а подробности всё равно ниже.
-    el.loadNoticeText.textContent = (skipped.length && outliers.length)
-      ? 'Расписание загружено, но к нему есть замечания.'
-      : '';
+    // Замечаний бывает до трёх видов. Пока оно одно, его текст встаёт прямо в
+    // шапку плашки; когда их несколько, шапка становится общей, а сами
+    // замечания идут строками ниже — перечислять их в одной фразе получилось
+    // бы длинно, а подробности всё равно под ними.
+    var kinds = (skipped.length ? 1 : 0) + (outliers.length ? 1 : 0) + (noAttrs ? 1 : 0);
+    el.loadNoticeText.textContent = kinds > 1 ? 'Расписание загружено, но к нему есть замечания.' : '';
+
+    function remark(text, details){
+      if(kinds > 1){
+        var line = document.createElement('div');
+        line.className = 'notice-line';
+        line.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+        el.loadNoticeList.appendChild(line);
+      } else {
+        el.loadNoticeText.textContent = 'Расписание загружено, но ' +
+          text.charAt(0).toLowerCase() + text.slice(1);
+      }
+      if(details && details.length) appendNoticeList(details);
+    }
 
     if(skipped.length){
       var n = skipped.length;
-      var word = plural(n, 'строку', 'строки', 'строк');
-      var tail = plural(n, 'это занятие в календарь не попало.',
-                           'эти занятия в календарь не попали.',
-                           'эти занятия в календарь не попали.');
-      var head = 'разобрать не удалось ' + n + ' ' + word + ' — ' + tail;
-      if(outliers.length){
-        var line = document.createElement('div');
-        line.className = 'notice-line';
-        line.textContent = head.charAt(0).toUpperCase() + head.slice(1);
-        el.loadNoticeList.appendChild(line);
-      } else {
-        el.loadNoticeText.textContent = 'Расписание загружено, но ' + head;
-      }
-      appendNoticeList(skipped.map(function(s){ return 'Строка ' + s.row + ': ' + s.reason; }));
+      remark('разобрать не удалось ' + n + ' ' + plural(n, 'строку', 'строки', 'строк') + ' — ' +
+             plural(n, 'это занятие в календарь не попало.',
+                       'эти занятия в календарь не попали.',
+                       'эти занятия в календарь не попали.'),
+             skipped.map(function(s){ return 'Строка ' + s.row + ': ' + s.reason; }));
     }
 
     if(outliers.length){
       var m = outliers.length;
-      var word2 = plural(m, 'занятие', 'занятия', 'занятий');
-      var verb = plural(m, 'выбивается', 'выбиваются', 'выбиваются');
-      var head2 = m + ' ' + word2 + ' ' + verb + ' из общего периода — проверьте даты в файле.';
-      if(skipped.length){
-        var line2 = document.createElement('div');
-        line2.className = 'notice-line';
-        line2.textContent = head2;
-        el.loadNoticeList.appendChild(line2);
-      } else {
-        el.loadNoticeText.textContent = 'Расписание загружено, но ' + head2.charAt(0).toLowerCase() + head2.slice(1);
-      }
-      appendNoticeList(outliers.map(function(o){
-        return formatDayHeading(dateFromKey(o.dateKey), weekdayShort(dateFromKey(o.dateKey))) +
-               ' ' + dateFromKey(o.dateKey).getUTCFullYear() + ' — ' + o.discipline;
-      }));
+      remark(m + ' ' + plural(m, 'занятие', 'занятия', 'занятий') + ' ' +
+             plural(m, 'выбивается', 'выбиваются', 'выбиваются') +
+             ' из общего периода — проверьте даты в файле.',
+             outliers.map(function(o){
+               return formatDayHeading(dateFromKey(o.dateKey), weekdayShort(dateFromKey(o.dateKey))) +
+                      ' ' + dateFromKey(o.dateKey).getUTCFullYear() + ' — ' + o.discipline;
+             }));
+    }
+
+    if(noAttrs){
+      // Сами занятия не перечисляются намеренно. Список повторил бы названия,
+      // которые и так видны в расписании, а сделать с ними в приложении
+      // нечего: пустые ячейки правятся только в самой выгрузке.
+      remark('для ' + noAttrs + ' ' + plural(noAttrs, 'занятия', 'занятий', 'занятий') +
+             ' не найдено атрибутов для фильтрации.');
     }
 
     el.loadNotice.classList.add('visible');
