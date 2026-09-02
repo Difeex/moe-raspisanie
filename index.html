@@ -126,6 +126,16 @@
     /* Dusty red — reads as "not a working day" without competing with the
        lesson colours or looking like an error. */
     --holiday:#cf8288;
+    /* Красный кнопки сброса в плавающей панели. Приглушённый, не сигнальный:
+       кнопка висит на виду всё время, пока человек читает список, и алый звал
+       бы нажать её просто так. Рамка держит ту же плотность, что цветные рамки
+       чипов видов работ (48%), заливка при наведении — ту же, что у мягких
+       подложек значков (16%), поэтому фон получается заметно светлее рамки.
+       С праздничным #cf8288 они близки по тону, но не встречаются: тот живёт
+       полоской в календаре, этот — кнопкой в панели над списком. */
+    --reset:#cb6a6a;
+    --reset-line:rgba(203,106,106,0.48);
+    --reset-soft:rgba(203,106,106,0.16);
     --mode:#243447;
     --mode-soft:rgba(36,52,71,0.12);
     /* Lightened work-type colors, legible on the dark selected day cell. */
@@ -649,21 +659,33 @@
   /* Единственный нажимаемый элемент в этом ряду. Высота ровно как у соседних
      чипов, чтобы ряд читался одной строкой, а отличие несёт иконка и
      поведение при наведении — те же, что у кнопки «Сбросить» в списке. */
+  /* Кнопка одета так, как выглядит чип вида работ под курсором: тёмная
+     подпись, цветная рамка и тень цвета самой рамки. Разница в том, что для
+     кнопки это состояние покоя, а не отклик, — она единственное действие в
+     панели, и её надо находить сразу, не наводя.
+
+     Значка нет намеренно. Он стоил 20px из 242, отведённых в панели под
+     перечисление, а рядом, за разделителем, стоит круглая кнопка «наверх»:
+     второй кружок со значком читался бы с ней как пара однородных действий,
+     хотя одно из них перебрасывает страницу, а другое снимает фильтры. */
   .cf-reset{
-    display:inline-flex;align-items:center;gap:6px;flex:none;position:relative;
+    display:inline-flex;align-items:center;flex:none;position:relative;
     height:26.5px;padding:0 11px;border-radius:999px;
-    border:1px solid var(--border-soft);background:var(--surface-strong);
-    color:var(--text-muted);font-size:12.5px;font-weight:600;
+    border:1px solid var(--reset-line);background:var(--surface-strong);
+    color:var(--text);font-size:12.5px;font-weight:600;
+    box-shadow:0 8px 18px color-mix(in srgb, var(--reset) 21%, transparent);
     cursor:pointer;white-space:nowrap;font-family:inherit;
-    transition:color .12s ease, border-color .12s ease, box-shadow .12s ease;
+    transition:color .12s ease, border-color .12s ease, box-shadow .12s ease, background .12s ease;
   }
   @media (hover:hover){
-    .cf-reset:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
-  }
-  .cf-reset svg{width:14px;height:14px;stroke:currentColor;color:var(--text-faint);flex:none;transition:color .12s ease}
-  /* Тот же тон, что у кнопки сброса в списке и у иконок «Очно»/«Онлайн». */
-  @media (hover:hover){
-    .cf-reset:hover svg{color:var(--mode)}
+    /* Под курсором добавляется заливка — светлее рамки втрое, чтобы подпись
+       осталась читаемой, а кнопка не превратилась в залитую плашку. Рамка
+       заодно набирает плотность своего же цвета: одной заливки мало, отклик
+       должен быть виден и на светлом фоне панели. */
+    .cf-reset:hover{
+      background:var(--reset-soft);
+      border-color:color-mix(in srgb, var(--reset) 62%, transparent);
+    }
   }
   /* Сам чип 26.5px — для пальца мало. Невидимое расширение до 44px: соседние
      чипы не нажимаются, отбирать у них нечего. */
@@ -3033,9 +3055,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       reset.className = 'cf-reset';
       reset.id = resetId;
       reset.title = 'Сбросить все фильтры';
-      reset.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-        'stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>' +
-        '<path d="M14.8 9.2l-5.6 5.6M9.2 9.2l5.6 5.6"/></svg><span>Сбросить</span>';
+      // Одна подпись, без значка: место в панели дороже, а найтись кнопка и
+      // так обязана — она здесь единственная цветная.
+      reset.textContent = 'Сбросить';
       container.appendChild(reset);
     }
   }
