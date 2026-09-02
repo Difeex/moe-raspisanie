@@ -906,19 +906,40 @@
   /* "Поток" chip opens the stream multiselect menu. It deliberately matches
      the mode chips (Очно/Онлайн) in height, color and hover treatment, and
      while its dropdown is open it takes the selected mode chip's fill. */
-  .chip-btn.stream-add.menu-open,
+  /* Раскрытое состояние держится само, без наведения: на сенсорном экране
+     наведения нет вовсе, а меню открывается и там. Правило про :hover здесь
+     лишь повторяет заливку, чтобы она не менялась под курсором.
+     Разделять их обязательно. Пока оба селектора стояли одним списком, а
+     потом список разрезали медиазапросом, первый оставался висеть без блока —
+     заливка пропадала, и белый плюс оказывался на белом фоне. */
+  .chip-btn.stream-add.menu-open{
+    background:var(--mode);color:#fff;border-color:transparent;box-shadow:var(--shadow-sm);
+  }
   @media (hover:hover){
     .chip-btn.stream-add.menu-open:hover{
       background:var(--mode);color:#fff;border-color:transparent;box-shadow:var(--shadow-sm);
     }
   }
   .chip-btn.stream-add.menu-open svg{color:#fff}
-  /* max-height is set in JS to fit exactly 5 rows; the rest scrolls. */
+  /* max-height ставится из JS ровно под пять строк; остальное прокручивается.
+     Прокрутка живёт не на самом меню, а на вложенном слое. Пока меню было и
+     скруглённой коробкой, и областью прокрутки разом, полосу браузер рисовал
+     поверх скругления: она шла прямой линией и выходила за нижний угол.
+     Скругление обрезает потомков только при overflow, отличном от visible, —
+     поэтому снаружи overflow:hidden, а прокрутка внутри. Заодно полоса
+     отодвинулась от края на 6px внутреннего отступа. */
   .stream-menu{
-    position:fixed;display:none;flex-direction:column;gap:2px;z-index:80;
-    min-width:180px;overflow-y:auto;padding:6px;border-radius:var(--radius-md);
+    position:fixed;display:none;flex-direction:column;z-index:80;
+    min-width:180px;overflow:hidden;padding:6px;border-radius:var(--radius-md);
   }
   .stream-menu.open{display:flex}
+  /* min-height:0 обязателен: в колоночном flex элемент по умолчанию не даёт
+     себя сжать ниже содержимого, и вместо прокрутки список распирал бы меню,
+     переставая слушаться max-height. */
+  .stream-menu-scroll{
+    display:flex;flex-direction:column;gap:2px;
+    overflow-y:auto;min-height:0;
+  }
   .stream-menu-item{
     text-align:left;border:none;background:transparent;border-radius:var(--radius-sm);
     padding:9px 12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap;
@@ -1574,7 +1595,9 @@
   </main>
 </div>
 
-<div class="stream-menu glass" id="streamMenu"></div>
+<div class="stream-menu glass" id="streamMenu">
+  <div class="stream-menu-scroll" id="streamMenuScroll"></div>
+</div>
 
 <!-- Экран входа лежит вне .app намеренно: приложение под ним скрыто целиком,
      и ни расписание, ни заметки не показываются до ввода пароля. -->
@@ -1998,7 +2021,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
      'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
      'dataStatus','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
-     'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','searchInput','resetFilters',
+     'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'calendarFilters','calendarFiltersList',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
      'dateChip','dateChipLabel','listDivider','listCount','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn',
@@ -2624,7 +2647,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function toggleStreamMenu(anchor, options){
     if(el.streamMenu.classList.contains('open')){ closeStreamMenu(); return; }
-    el.streamMenu.innerHTML = '';
+    el.streamMenuScroll.innerHTML = '';
     options.forEach(function(tag){
       var item = document.createElement('button');
       item.className = 'stream-menu-item';
@@ -2634,7 +2657,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         closeStreamMenu();
         renderAll();
       });
-      el.streamMenu.appendChild(item);
+      el.streamMenuScroll.appendChild(item);
     });
     el.streamMenu.classList.add('open');
     anchor.classList.add('menu-open');
@@ -2647,9 +2670,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var menu = el.streamMenu;
     var items = menu.querySelectorAll('.stream-menu-item');
     if(items.length <= 5){ menu.style.maxHeight = ''; return; }
-    var styles = getComputedStyle(menu);
-    var gap = parseFloat(styles.rowGap) || 0;
-    var padding = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom);
+    // Промежуток между пунктами живёт на слое прокрутки, а внутренние отступы —
+    // на самом меню: с тех пор как скруглённая коробка и область прокрутки
+    // разделены, брать обе величины с одного элемента нельзя.
+    var gap = parseFloat(getComputedStyle(el.streamMenuScroll).rowGap) || 0;
+    var box = getComputedStyle(menu);
+    var padding = parseFloat(box.paddingTop) + parseFloat(box.paddingBottom);
     var rowHeight = items[0].getBoundingClientRect().height;
     menu.style.maxHeight = (rowHeight * 5 + gap * 4 + padding) + 'px';
   }
@@ -2679,7 +2705,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.streamMenu.classList.remove('open');
     // Items are rebuilt on every open, so drop them now rather than leave the
     // previous list sitting in the DOM after a data swap.
-    el.streamMenu.innerHTML = '';
+    // Чистится слой прокрутки, а не само меню: слой — часть его устройства, и
+    // затирание innerHTML меню сносило бы его вместе с пунктами. Один раз это
+    // уже случилось: closeStreamMenu вызывается ещё при запуске, и слой
+    // пропадал до первого открытия.
+    el.streamMenuScroll.innerHTML = '';
     var add = el.streamFilters.querySelector('.stream-add');
     if(add) add.classList.remove('menu-open');
   }
