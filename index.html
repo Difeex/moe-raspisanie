@@ -2377,21 +2377,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!noteEditingKey) return false;
     var text = el.noteInput.value.trim();
     var had = !!noteText(noteEditingKey);
-    // Пустой текст записывается, а не стирает запись: это надгробие, без
-    // которого удалённое воскресает при слиянии. Отметка времени ставится в
-    // обоих случаях — удаление для слияния ничем не отличается от правки.
+    // Пустой текст стирает запись. Прежде здесь оставалось надгробие: без
+    // него удалённое воскресало при слиянии, потому что «нет записи» было не
+    // отличить от «на том устройстве её ещё не завели». Теперь на этот вопрос
+    // отвечает слепок последнего обмена, а файл заметок избавлен от мусора.
     //
     // Два случая, когда писать не нужно, и оба важны именно для слияния:
     //   — текст не изменился: иначе updatedAt двигался бы на каждое открытие
     //     правки, и пустое открытие «побеждало» бы чужую настоящую правку;
     //   — записи не было и текст пуст: правку открыли и закрыли, не набрав
-    //     ничего. Надгробие в дне, где заметки никогда не было, засоряло бы
-    //     хранилище, а при слиянии его свежая отметка стёрла бы заметку,
-    //     написанную в этот день на другом устройстве.
+    //     ничего. Заводить и тут же удалять запись незачем.
     var prev = notes[noteEditingKey];
     var changed = prev ? (prev.text !== text) : !!text;
     if(changed){
-      notes[noteEditingKey] = { text: text, updatedAt: new Date().toISOString() };
+      if(text) notes[noteEditingKey] = { text: text, updatedAt: new Date().toISOString() };
+      else delete notes[noteEditingKey];
       saveNotes();
     }
     return had !== !!text;
@@ -2442,11 +2442,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function deleteNote(dateKey){
     if(!dateKey) return;
     var had = !!noteText(dateKey);
-    // Запись не стирается, а превращается в надгробие — см. commitNote.
-    // Надгробие ставится, только если было что удалять: «Удалить» в правке
-    // доступна и на дне без заметки, и там ей делать нечего.
+    // Запись именно стирается. Вернуться с другого устройства при слиянии ей
+    // не даст слепок последнего обмена: он помнит, что заметка была, и
+    // отличает удаление от «там её ещё не завели».
     if(notes[dateKey]){
-      if(had) notes[dateKey] = { text: '', updatedAt: new Date().toISOString() };
+      delete notes[dateKey];
       saveNotes();
     }
     if(had) logEvent('note', 'deleted', dateKey);
@@ -4822,32 +4822,70 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return out;
   }
 
-  function mergeNotes(local, remote){
+  /* Слияние на три стороны: своё, чужое и слепок — то, на чём мы сошлись в
+     прошлый раз.
+
+     Двух сторон недостаточно. Заметки нет в файле — это может значить и «её
+     удалили с другого устройства», и «её там ещё не завели»; своя заметка
+     новее чужой — это может значить и «я её поправил», и «я писал вслепую и
+     о чужой не знал». Различает эти случаи только слепок.
+
+     Он же избавил файл от надгробий. Раньше удаление приходилось хранить
+     пустой записью, иначе стёртое возвращалось при первом же слиянии. Теперь
+     удаление — это просто отсутствие: слепок помнит, что заметка была, а
+     значит её исчезновение и есть удаление. Файл стал списком существующих
+     заметок, без мусора; историю удалений хранит журнал.
+
+     Правило: смотрим, кто менялся с прошлого обмена. Менялась одна сторона —
+     её и берём. Менялись обе — это спор, и решать его молча нельзя. */
+  function threeWay(base, local, remote){
     var ключи = {}, k;
-    for(k in local) if(Object.prototype.hasOwnProperty.call(local, k)) ключи[k] = true;
+    for(k in base)   if(Object.prototype.hasOwnProperty.call(base, k))   ключи[k] = true;
+    for(k in local)  if(Object.prototype.hasOwnProperty.call(local, k))  ключи[k] = true;
     for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) ключи[k] = true;
 
-    var merged = {}, added = 0, updated = 0, deleted = 0;
-    Object.keys(ключи).forEach(function(k){
-      var l = local[k], r = remote[k], победа;
-      if(!l) победа = r;
-      else if(!r) победа = l;
-      else {
-        var lt = l.updatedAt || '', rt = r.updatedAt || '';
-        // Отметки — ISO с миллисекундами, поэтому сравниваются как строки:
-        // порядок символов у них совпадает с порядком времени.
-        победа = (rt >= lt) ? r : l;
-      }
-      merged[k] = победа;
+    var out = {}, added = 0, updated = 0, deleted = 0, споры = [];
+    Object.keys(ключи).sort().forEach(function(k){
+      var b = base[k], l = local[k], r = remote[k];
+      var чужоеМенялось = !sameNote(b, r);
+      var своёМенялось  = !sameNote(b, l);
 
-      // Счётчики описывают то, что изменилось ЗДЕСЬ: человеку интересно, что
-      // приехало с другого устройства, а не сколько записей в файле.
-      var былТекст = !!(l && l.text), сталТекст = !!победа.text;
-      if(!былТекст && сталТекст) added++;
-      else if(былТекст && !сталТекст) deleted++;
-      else if(былТекст && сталТекст && l.text !== победа.text) updated++;
+      if(!чужоеМенялось){
+        // У них ничего нового: остаёмся при своём, каким бы оно ни было.
+        if(l) out[k] = l;
+        return;
+      }
+      if(!своёМенялось){
+        // Менялись только они — принимаем. Исчезновение записи здесь и есть
+        // удаление, сделанное на другом устройстве.
+        if(r){
+          out[k] = r;
+          if(!l) added++; else if(l.text !== r.text) updated++;
+        } else if(l){
+          deleted++;
+        }
+        return;
+      }
+
+      /* Менялись обе стороны — спор, и решать его молча нельзя.
+
+         Если одна из сторон удалила, а другая написала, не зная об удалении,
+         заметка остаётся: потерять написанный текст хуже, чем оставить
+         лишнюю строчку, которую человек сотрёт одним нажатием. Если обе
+         писали — берём более позднюю, но спор всё равно называем: человек
+         увидит оба текста и решит сам. */
+      var победа = null;
+      if(l && r) победа = ((r.updatedAt || '') > (l.updatedAt || '')) ? r : l;
+      else победа = l || r;
+      if(победа) out[k] = победа;
+
+      споры.push({ date: k,
+                   mine:   l ? l.text : null, mineAt:   l ? l.updatedAt : null,
+                   theirs: r ? r.text : null, theirsAt: r ? r.updatedAt : null });
+      if(l && победа !== l) updated++;
+      if(!l && победа) added++;
     });
-    return { notes: merged, added: added, updated: updated, deleted: deleted };
+    return { notes: out, added: added, updated: updated, deleted: deleted, conflicts: споры };
   }
 
   /* ДВА ПУТИ, И ОНИ НЕ СИММЕТРИЧНЫ.
@@ -4870,23 +4908,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      общий, и запись «своим состоянием поверх» стёрла бы в нём заметки, которые
      туда положило другое устройство. Поэтому в файл кладётся объединение, а
      приложение остаётся при своём. */
+  /* Что записать в файл, не трогая приложение.
+
+     От сведения отличается тем, что спорные дни не решаются вовсе: в файле
+     остаётся чужое, у нас на экране своё, и оба дожидаются человека. Решить
+     спор в фоне значило бы стереть текст, которого никто не видел. */
   function pushMerge(remote){
     var base = readNotesBase(), out = {}, отложено = [], k;
-    // Начинаем с чужого: всё, что там лежит, остаётся на месте, пока мы не
-    // получим права это менять.
     for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) out[k] = remote[k];
 
-    Object.keys(notes).forEach(function(k){
-      var своё = notes[k], чужое = remote[k];
-      // Дня у них нет — просто добавляем свой.
-      if(!чужое){ out[k] = своё; return; }
-      // Чужое изменилось с прошлого обмена: значит с другого устройства сюда
-      // писали, а мы этого не видели. Не трогаем — разберётся человек, когда
-      // нажмёт «свести», и увидит оба текста.
-      if(!sameNote(base[k], чужое)){ отложено.push(k); return; }
-      // Чужое с прошлого обмена не менялось — значит наша правка сделана
-      // поверх того же, что там лежит, и заменить её можно.
-      if((своё.updatedAt || '') > (чужое.updatedAt || '')) out[k] = своё;
+    var сведение = threeWay(base, notes, remote);
+    сведение.conflicts.forEach(function(c){ отложено.push(c.date); });
+
+    Object.keys(сведение.notes).forEach(function(k){
+      var спорный = отложено.indexOf(k) !== -1;
+      if(спорный) return;                 // спорное оставляем как есть у них
+      out[k] = сведение.notes[k];
+    });
+    // Удаление, сделанное здесь, из файла убирается — но только если спора нет.
+    Object.keys(remote).forEach(function(k){
+      if(!сведение.notes[k] && отложено.indexOf(k) === -1) delete out[k];
     });
     return { out: out, отложено: отложено };
   }
@@ -4910,20 +4951,34 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return text;
     }, opts).then(function(res){
       if(res && res.sha) saveSyncState({ notesSha: res.sha });
-      /* Слепок обновляется и когда записи не потребовалось: мы всё равно
-         видели содержимое файла.
+      /* Слепок значит «на этом файл и приложение сошлись», и записывать в него
+         можно только то, что действительно сошлось.
 
-         Но дни, которые мы не тронули из-за чужой правки, в слепок не идут.
-         Слепок значит «это мы приняли», а мы её не принимали — мы её обошли.
-         Запиши её сюда, и при сведении спор пропадёт: выйдет, что чужое
-         известно, а раз наше новее, то оно и правее. Человек так и не узнает,
-         что на этот день была вторая заметка. */
+         День записан в файл ровно тем, что лежит у нас, — сошлись, помним.
+         Разошлись — не помним, каким бы ни был файл. Разойтись они могут по
+         двум причинам, и обе важны.
+
+         Спорный день мы не тронули: в файле чужое, у нас своё. Запиши сюда
+         чужое — и при сведении спор пропадёт: выйдет, что чужое известно, а
+         раз наше новее, то оно и правее. Человек не узнает, что была вторая
+         заметка.
+
+         Удаление, сделанное на другом устройстве, мы записью применили к
+         файлу, но не к себе: приложение трогать нельзя, вниз тянут только по
+         кнопке. Запиши сюда «записи нет» — и следующая отправка сочтёт нашу
+         уцелевшую заметку новой и вернёт её в файл. Стёртое воскреснет, и
+         именно так оно и произошло на проверке. */
       if(записано){
-        var прежний = readNotesBase(), слепок = {}, k;
-        for(k in записано) if(Object.prototype.hasOwnProperty.call(записано, k)) слепок[k] = записано[k];
-        отложено.forEach(function(k){
-          if(прежний[k]) слепок[k] = прежний[k];
-          else delete слепок[k];
+        var прежний = readNotesBase(), слепок = {}, ключи = {}, k;
+        for(k in записано) if(Object.prototype.hasOwnProperty.call(записано, k)) ключи[k] = true;
+        for(k in notes)    if(Object.prototype.hasOwnProperty.call(notes, k))    ключи[k] = true;
+        for(k in прежний)  if(Object.prototype.hasOwnProperty.call(прежний, k))  ключи[k] = true;
+        Object.keys(ключи).forEach(function(k){
+          if(sameNote(записано[k], notes[k])){
+            if(записано[k]) слепок[k] = записано[k];
+          } else if(прежний[k]){
+            слепок[k] = прежний[k];
+          }
         });
         saveNotesBase(слепок);
       }
@@ -4958,31 +5013,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         catch(e){ throw syncError('unknown'); }
       }
       var base = readNotesBase();
-      var incoming = 0, outgoing = 0, споры = [], чужаяПравка = '';
-      var ключи = {}, k;
-      for(k in notes) if(Object.prototype.hasOwnProperty.call(notes, k)) ключи[k] = true;
-      for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) ключи[k] = true;
-
-      Object.keys(ключи).sort().forEach(function(k){
-        var l = notes[k], r = remote[k];
-        if(r && r.updatedAt > чужаяПравка) чужаяПравка = r.updatedAt;
-        if(!r){ if(l && l.text) outgoing++; return; }
-        if(!l){ if(r.text) incoming++; return; }
-        if(l.text === r.text) return;
-
-        // День спорный, если обе стороны писали в него, не видя друг друга:
-        // чужое изменилось с прошлого обмена, и наше тоже не то, что было.
-        var чужоеМенялось = !sameNote(base[k], r);
-        var своёМенялось = !sameNote(base[k], l);
-        if(чужоеМенялось && своёМенялось){
-          // Оба текста отдаются наружу: числом «один спорный день» человеку
-          // решать нечего, ему надо увидеть, что именно расходится.
-          споры.push({ date: k, mine: l.text, theirs: r.text,
-                       mineAt: l.updatedAt, theirsAt: r.updatedAt });
-          return;
-        }
-        if((r.updatedAt || '') > (l.updatedAt || '')) incoming++;
-        else outgoing++;
+      var сведение = threeWay(base, notes, remote);
+      var споры = сведение.conflicts, чужаяПравка = '';
+      Object.keys(remote).forEach(function(k){
+        if(remote[k].updatedAt > чужаяПравка) чужаяПравка = remote[k].updatedAt;
+      });
+      // incoming — что приедет сюда, outgoing — что уедет отсюда. Спорные дни
+      // в них не входят: они не приедут и не уедут, пока человек не решит.
+      var incoming = сведение.added + сведение.updated + сведение.deleted;
+      var outgoing = 0;
+      Object.keys(notes).forEach(function(k){
+        if(споры.some(function(c){ return c.date === k; })) return;
+        if(!sameNote(base[k], notes[k]) && sameNote(base[k], remote[k])) outgoing++;
+      });
+      Object.keys(base).forEach(function(k){
+        if(!notes[k] && remote[k] && sameNote(base[k], remote[k])) outgoing++;
       });
       return { incoming: incoming, outgoing: outgoing,
                conflicts: споры.length, conflictDays: споры,
@@ -5007,7 +5052,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         try{ remote = validNotes(JSON.parse(file.text)); }
         catch(e){ throw syncError('unknown'); }
       }
-      var m = mergeNotes(notes, remote);
+      var m = threeWay(readNotesBase(), notes, remote);
       notes = m.notes;
       saveNotesQuietly();
       // После сведения мы видели всё, что было в файле, — с этого состояния и
@@ -5070,16 +5115,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       'Заметки к дням', { keepalive: true }).catch(function(){});
   }
 
-  /* Удалить все заметки — это не удаление, а простановка надгробий текущим
-     временем. При физическом удалении второе устройство вернуло бы их обратно
-     при первом же слиянии. */
+  /* Удалить все заметки. Записи стираются; вернуться с другого устройства им
+     не даст слепок последнего обмена. */
   function syncClearNotes(){
     var погашено = 0;
     Object.keys(notes).forEach(function(k){
-      if(notes[k] && notes[k].text){
-        notes[k] = { text: '', updatedAt: new Date().toISOString() };
-        погашено++;
-      }
+      if(notes[k] && notes[k].text){ delete notes[k]; погашено++; }
     });
     saveNotesQuietly();
     renderCalendar();
