@@ -2936,6 +2936,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           var wasSelected = (filters.date === dk);
           filters.date = wasSelected ? null : dk;
           renderAll();
+          if(!wasSelected) revealListOnNarrow();
         });
       })(dateKey);
 
@@ -3580,6 +3581,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     try{ localStorage.removeItem(STORAGE_EVENTS); localStorage.removeItem(STORAGE_META); }catch(e){}
     showNoData();
     renderShell();
+  }
+
+  // Ответ на выбор дня, когда список идёт под календарём.
+  //
+  // Пока на узком экране были вкладки, ответом было переключение: человек
+  // спрашивал «что в этот день» и оказывался в списке. Со списком под
+  // календарём ответ никуда не делся, но уехал за нижний край — на 360px
+  // первая карточка стоит на 964px при экране в 780. Нажимаешь день, а на
+  // экране меняется только плитка.
+  //
+  // Прокрутка ставит панель списка под шапку, а не в самый верх окна: шапка
+  // уезжает вместе со страницей, и без запаса первая строка списка упиралась
+  // бы в край. Отступ тот же, что у плавающей панели фильтров.
+  //
+  // Только при выборе дня, не при снятии: снятие возвращает список к полному
+  // виду, и уводить человека с календаря незачем — он уже там и, судя по
+  // повторному нажатию, продолжает работать именно с календарём. Это правило
+  // было и у вкладок, оно не менялось.
+  //
+  // Только на узком экране: на десктопе список и так виден рядом.
+  function revealListOnNarrow(){
+    if(window.matchMedia('(min-width:861px)').matches) return;
+    var top = el.listPanel.getBoundingClientRect().top + window.pageYOffset - SCROLL_PANEL_TOP;
+    if(top <= window.pageYOffset) return;   // список уже виден выше — дёргать нечего
+    var smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: top, behavior: smooth ? 'smooth' : 'auto' });
   }
 
   // ---------- mobile tabs ----------
