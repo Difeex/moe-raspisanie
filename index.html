@@ -272,7 +272,9 @@
     transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
     background:var(--surface-strong);color:var(--text);
   }
-  .btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  @media (hover:hover){
+    .btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  }
   .btn:active{transform:translateY(0)}
   .btn-primary{background:linear-gradient(135deg,var(--lecture),#5b8be8);color:#fff;border:none;box-shadow:0 8px 20px rgba(59,111,214,0.32)}
   .btn-ghost{background:transparent;border:1px solid var(--border-soft);color:var(--text-muted)}
@@ -283,7 +285,9 @@
     cursor:pointer;font-size:18px;line-height:1;color:var(--text-muted);
     transition:color .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
-  .icon-btn:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  @media (hover:hover){
+    .icon-btn:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  }
   .icon-btn svg{width:18px;height:18px}
 
   /* ---------- Layout ---------- */
@@ -418,14 +422,20 @@
        Под курсором догоняет подпись и темнеет вместе с ней. */
     color:var(--text-faint);transition:color .12s ease;
   }
-  .hdr-btn-clear:hover svg{color:inherit}
-  .today-btn:hover, .hdr-btn:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  @media (hover:hover){
+    .hdr-btn-clear:hover svg{color:inherit}
+  }
+  @media (hover:hover){
+    .today-btn:hover, .hdr-btn:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  }
   /* Кнопкам шапки тень крупнее общей: они заметно шире «Сегодня», и мелкое
      пятно под широким элементом выглядело обрубленным. Размах взят от чипов
      фильтров (0 8px 18px) и подогнан под ширину — «Сегодня» остаётся на общей
      тени, она у неё по размеру. Значение выбрано ровно посередине между общей
      мелкой тенью и заметно более крупной, которую пробовали до этого. */
-  .hdr-btn:hover{box-shadow:0 7px 17px rgba(31,41,55,0.13)}
+  @media (hover:hover){
+    .hdr-btn:hover{box-shadow:0 7px 17px rgba(31,41,55,0.13)}
+  }
   /* Главное действие шапки взято обводкой, а не заливкой — как ячейка
      сегодняшнего дня в календаре: голубая рамка и светло-синяя подпись в покое,
      полный акцент под курсором. Заливки нет намеренно: прежняя синяя плашка
@@ -443,9 +453,11 @@
   }
   /* Тень при наведении акцентная, а не общая серая: под синей рамкой серое
      пятно читается как грязь. */
-  .hdr-btn-accent:hover{
-    border-color:var(--accent);color:var(--accent);
-    box-shadow:0 7px 17px color-mix(in srgb, var(--accent) 20%, transparent);
+  @media (hover:hover){
+    .hdr-btn-accent:hover{
+      border-color:var(--accent);color:var(--accent);
+      box-shadow:0 7px 17px color-mix(in srgb, var(--accent) 20%, transparent);
+    }
   }
   .weekday-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 2px}
   .weekday-row span{text-align:center;font-size:clamp(11px,3.05cqw,13px);font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em}
@@ -470,11 +482,13 @@
      (the date number would flicker out). Muted days are dimmed with plain
      color tokens instead, which has no such issue. */
   /* Days with lessons borrow the «Сегодня» button's hover border. */
-  .day-cell:hover{
-    background:var(--surface-strong);
-    border-color:var(--border-hover);
-    box-shadow:0 14px 28px rgba(31,41,55,0.18);
-    transform:translateY(-3px);
+  @media (hover:hover){
+    .day-cell:hover{
+      background:var(--surface-strong);
+      border-color:var(--border-hover);
+      box-shadow:0 14px 28px rgba(31,41,55,0.18);
+      transform:translateY(-3px);
+    }
   }
   /* Two different notions, deliberately split:
        .no-lessons — the day holds nothing at all, so it carries no border in
@@ -483,7 +497,9 @@
                      so only its number dims while the border stays.
      That way filtering changes brightness, never the frame. */
   .day-cell.no-lessons{border-color:transparent}
-  .day-cell.no-lessons:hover{border-color:transparent}
+  @media (hover:hover){
+    .day-cell.no-lessons:hover{border-color:transparent}
+  }
   .day-cell.empty-day{visibility:hidden;cursor:default}
   .day-cell.no-events .num{color:var(--text-faint)}
   /* Покой — тот же тон, что у подписи невыбранного чипа (--text-muted);
@@ -497,21 +513,29 @@
      слабее, чтобы под курсором сохранялась разница с днями, где занятия есть,
      но разницу и без того несут рамка и полоски — а разный отклик читался как
      сбой, будто часть ячеек нажимается хуже. */
-  .day-cell:not(.is-today):not(.selected):hover .num{color:var(--text)}
+  @media (hover:hover){
+    .day-cell:not(.is-today):not(.selected):hover .num{color:var(--text)}
+  }
   .day-cell.is-today{border-color:var(--today-line)}
   /* Тень тоже акцентная — см. кнопку «Загрузить». Правило идёт после общего
      .day-cell:hover, поэтому перекрывает его серую тень; выбранный день ниже
      сохраняет свою тёмную, он уже залит цветом. */
-  .day-cell.is-today:hover{
-    border-color:var(--accent);
-    box-shadow:0 14px 28px color-mix(in srgb, var(--accent) 20%, transparent);
+  @media (hover:hover){
+    .day-cell.is-today:hover{
+      border-color:var(--accent);
+      box-shadow:0 14px 28px color-mix(in srgb, var(--accent) 20%, transparent);
+    }
   }
   /* Как у кнопки «Загрузить»: в покое число светлее, под курсором набирает
      полный акцент — иначе отклик несла бы только рамка. */
   .day-cell.is-today .num{color:color-mix(in srgb, var(--accent) 75%, #fff)}
-  .day-cell.is-today:hover .num{color:var(--accent)}
+  @media (hover:hover){
+    .day-cell.is-today:hover .num{color:var(--accent)}
+  }
   .day-cell.selected{background:var(--mode);border-color:transparent;box-shadow:0 8px 20px rgba(36,52,71,0.35)}
-  .day-cell.selected:hover{background:var(--mode);border-color:transparent;box-shadow:0 16px 32px rgba(36,52,71,0.42)}
+  @media (hover:hover){
+    .day-cell.selected:hover{background:var(--mode);border-color:transparent;box-shadow:0 16px 32px rgba(36,52,71,0.42)}
+  }
   .day-cell.selected .num{color:#fff}
   /* Oval strips: up to 5 fit the cell's own width via equal flex shares, so
      they never overflow regardless of how many lessons fall on that day.
@@ -659,10 +683,14 @@
     cursor:pointer;white-space:nowrap;font-family:inherit;
     transition:color .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
-  .cf-reset:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  @media (hover:hover){
+    .cf-reset:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  }
   .cf-reset svg{width:14px;height:14px;stroke:currentColor;color:var(--text-faint);flex:none;transition:color .12s ease}
   /* Тот же тон, что у кнопки сброса в списке и у иконок «Очно»/«Онлайн». */
-  .cf-reset:hover svg{color:var(--mode)}
+  @media (hover:hover){
+    .cf-reset:hover svg{color:var(--mode)}
+  }
   /* Сам чип 26.5px — для пальца мало. Невидимое расширение до 44px: соседние
      чипы не нажимаются, отбирать у них нечего. */
   .cf-reset::after{content:'';position:absolute;top:-9px;right:-9px;bottom:-9px;left:-9px}
@@ -730,7 +758,9 @@
     transition:color .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
   .sf-top svg{width:14px;height:14px;stroke:currentColor}
-  .sf-top:hover{color:var(--mode);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  @media (hover:hover){
+    .sf-top:hover{color:var(--mode);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  }
   /* Сама кнопка 26.5px — для промаха мышью мало. Невидимое расширение до 44px;
      соседний разделитель и чипы нажатий не принимают, отбирать не у кого. */
   .sf-top::after{content:'';position:absolute;top:-9px;right:-9px;bottom:-9px;left:-9px}
@@ -814,7 +844,9 @@
   .legend-toggle::after{
     content:'';position:absolute;left:-10px;right:-10px;top:-4px;bottom:-28px;
   }
-  .legend-toggle:hover{color:var(--text)}
+  @media (hover:hover){
+    .legend-toggle:hover{color:var(--text)}
+  }
   /* Off state: the swatch goes grey and the label is struck through, so the
      row reads as "excluded" rather than as a colour that merely happens to be
      absent from the current month. */
@@ -853,14 +885,16 @@
     transition:border-color .12s ease, box-shadow .12s ease, background .12s ease, color .12s ease;
   }
   .chip-btn svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);transition:color .12s ease}
-  .chip-btn:not(.active):hover{
-    /* Текст темнеет так же, как у «Сегодня» и «Сбросить»: невыбранный чип
-       откликается на наведение всем сразу — рамкой, иконкой и подписью.
-       Выбранные (.active) исключены — там подпись уже белая на заливке,
-       как и у открытого «+ Поток», чьё правило идёт ниже и специфичнее. */
-    color:var(--text);
-    border-color:var(--chip-line,var(--border-hover));
-    box-shadow:0 8px 18px rgba(31,41,55,0.15);
+  @media (hover:hover){
+    .chip-btn:not(.active):hover{
+      /* Текст темнеет так же, как у «Сегодня» и «Сбросить»: невыбранный чип
+         откликается на наведение всем сразу — рамкой, иконкой и подписью.
+         Выбранные (.active) исключены — там подпись уже белая на заливке,
+         как и у открытого «+ Поток», чьё правило идёт ниже и специфичнее. */
+      color:var(--text);
+      border-color:var(--chip-line,var(--border-hover));
+      box-shadow:0 8px 18px rgba(31,41,55,0.15);
+    }
   }
   /* У чипов видов работ тень при наведении берётся от их собственного цвета,
      а не от общей серой: под цветной рамкой серое пятно выглядело грязным.
@@ -869,21 +903,29 @@
      color-mix разбавляет цвет прозрачностью прямо в объявлении: сам
      --chip-color приходит из JS готовым значением, добавить к нему альфу
      иначе нельзя. */
-  .chip-btn[data-group="workTypes"]:not(.active):hover{
-    box-shadow:0 8px 18px color-mix(in srgb, var(--chip-color) 21%, transparent);
+  @media (hover:hover){
+    .chip-btn[data-group="workTypes"]:not(.active):hover{
+      box-shadow:0 8px 18px color-mix(in srgb, var(--chip-color) 21%, transparent);
+    }
   }
-  .chip-btn:not(.active):hover svg{color:var(--chip-color,var(--text-faint))}
+  @media (hover:hover){
+    .chip-btn:not(.active):hover svg{color:var(--chip-color,var(--text-faint))}
+  }
   .chip-btn.active{color:#fff;border-color:transparent;box-shadow:var(--shadow-sm)}
   .chip-btn.active svg{color:#fff}
-  .chip-btn.active:hover{box-shadow:0 8px 18px rgba(31,41,55,0.22)}
+  @media (hover:hover){
+    .chip-btn.active:hover{box-shadow:0 8px 18px rgba(31,41,55,0.22)}
+  }
   .chip-btn.tag{padding:7px 12px;font-size:12.5px}
 
   /* "Поток" chip opens the stream multiselect menu. It deliberately matches
      the mode chips (Очно/Онлайн) in height, color and hover treatment, and
      while its dropdown is open it takes the selected mode chip's fill. */
   .chip-btn.stream-add.menu-open,
-  .chip-btn.stream-add.menu-open:hover{
-    background:var(--mode);color:#fff;border-color:transparent;box-shadow:var(--shadow-sm);
+  @media (hover:hover){
+    .chip-btn.stream-add.menu-open:hover{
+      background:var(--mode);color:#fff;border-color:transparent;box-shadow:var(--shadow-sm);
+    }
   }
   .chip-btn.stream-add.menu-open svg{color:#fff}
   /* max-height is set in JS to fit exactly 5 rows; the rest scrolls. */
@@ -897,7 +939,9 @@
     padding:9px 12px;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;white-space:nowrap;
     transition:background .12s ease, color .12s ease;
   }
-  .stream-menu-item:hover{background:var(--lecture-soft);color:var(--lecture)}
+  @media (hover:hover){
+    .stream-menu-item:hover{background:var(--lecture-soft);color:var(--lecture)}
+  }
   /* Search field and the reset button share one explicit height so they line
      up exactly, regardless of their different paddings and font sizes. */
   .search-wrap{position:relative;flex:1;min-width:180px}
@@ -913,13 +957,17 @@
     color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
     transition:color .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
-  .reset-btn:hover{color:var(--text);background:var(--surface-strong);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  @media (hover:hover){
+    .reset-btn:hover{color:var(--text);background:var(--surface-strong);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+  }
   /* Same muted grey the chip icons use at rest. */
   .reset-btn svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);flex:none;transition:color .12s ease}
   /* При наведении иконка темнеет до того же тона, что у «Очно» и «Онлайн»
      (--mode): у тех при hover срабатывает --chip-color, и на фоне соседей
      сброс со светлым --text-muted выглядел недожатым. */
-  .reset-btn:hover svg{color:var(--mode)}
+  @media (hover:hover){
+    .reset-btn:hover svg{color:var(--mode)}
+  }
 
   /* Mirrors the selected day cell in the calendar, so the same selection
      reads as one colour on both sides. */
@@ -965,7 +1013,9 @@
      панели, и отклик читается как у всего остального в этой колонке.
      Прежний --surface-soft (0.4 против 0.62) давал заметно более тусклое
      пятно, и на фоне соседних карточек отклик выглядел неуверенным. */
-  .note-block.empty:hover{background:var(--surface);color:var(--text)}
+  @media (hover:hover){
+    .note-block.empty:hover{background:var(--surface);color:var(--text)}
+  }
   /* Написанная заметка берёт цвет уголка из календаря — тот же тон в обоих
      местах, иначе признак и содержание читались бы как разные вещи. */
   .note-block.filled{
@@ -982,9 +1032,11 @@
      берётся цветной, а не общей серой: под цветной рамкой серое пятно читается
      как грязь — то же правило, что у «Загрузить» и ячейки сегодняшнего дня.
      Насыщенность 20% — та же, что там. */
-  .note-block.filled:hover{
-    border-color:color-mix(in srgb, var(--note-strong) 62%, transparent);
-    box-shadow:0 4px 12px color-mix(in srgb, var(--note-strong) 20%, transparent);
+  @media (hover:hover){
+    .note-block.filled:hover{
+      border-color:color-mix(in srgb, var(--note-strong) 62%, transparent);
+      box-shadow:0 4px 12px color-mix(in srgb, var(--note-strong) 20%, transparent);
+    }
   }
   /* Крестик нужен именно здесь: «Очистить» заметки не трогает (они переживают
      и очистку, и замену файла), поэтому стереть написанное больше нечем.
@@ -994,9 +1046,17 @@
     border:none;background:transparent;color:var(--text-faint);cursor:pointer;border-radius:8px;
     opacity:0;transition:opacity .12s ease, color .12s ease, background .12s ease;
   }
-  .note-block:hover .note-del,
+  /* Проявление крестика по наведению и по фокусу разведено намеренно. Первое
+     за медиазапросом — на сенсорном экране наведения нет, и правило только
+     залипало бы после нажатия. Второе снаружи: клавиатура бывает и у
+     сенсорного устройства, и там крестик обязан показываться. */
+  @media (hover:hover){
+    .note-block:hover .note-del{opacity:1}
+  }
   .note-del:focus-visible{opacity:1}
-  .note-del:hover{color:var(--holiday);background:rgba(207,130,136,0.12)}
+  @media (hover:hover){
+    .note-del:hover{color:var(--holiday);background:rgba(207,130,136,0.12)}
+  }
   .note-del svg{width:14px;height:14px;margin-top:0;color:currentColor;opacity:1}
   .note-edit{
     display:none;flex-direction:column;gap:8px;
@@ -1018,9 +1078,13 @@
     font-size:12.5px;font-weight:600;cursor:pointer;
     transition:color .12s ease, border-color .12s ease;
   }
-  .note-btn:hover{color:var(--text);border-color:var(--border-hover)}
+  @media (hover:hover){
+    .note-btn:hover{color:var(--text);border-color:var(--border-hover)}
+  }
   .note-btn-primary{border-color:var(--today-line);color:var(--accent)}
-  .note-btn-primary:hover{border-color:var(--accent);color:var(--accent)}
+  @media (hover:hover){
+    .note-btn-primary:hover{border-color:var(--accent);color:var(--accent)}
+  }
 
   /* ---------- Event list ---------- */
   .event-list{display:flex;flex-direction:column;gap:14px;overflow:visible}
@@ -1162,7 +1226,9 @@
   /* Сама кнопка 26px — для пальца мало. Невидимое расширение до 44px во все
      стороны: соседей-кнопок рядом нет, отбирать нажатия не у кого. */
   .banner-close::after{content:'';position:absolute;top:-9px;right:-9px;bottom:-9px;left:-9px}
-  .banner-close:hover{opacity:1;background:var(--close-hover,rgba(31,41,55,.10))}
+  @media (hover:hover){
+    .banner-close:hover{opacity:1;background:var(--close-hover,rgba(31,41,55,.10))}
+  }
   .banner-close svg{width:15px;height:15px;stroke:currentColor}
   .load-notice{--close-hover:rgba(221,138,46,0.18)}
   .upload-error{--close-hover:rgba(199,72,72,0.16)}
@@ -3236,6 +3302,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function afterDataLoaded(){
     hideNoData();
     renderShell();
+    // Приход новых данных всегда возвращает человека на главный экран сверху.
+    // renderShell уже сбросил месяц на текущий, снял выбранный день и очистил
+    // фильтры, но прокрутка от этого не меняется: на узком экране страница
+    // бывает в тысячи пикселей, и загрузив файл из её середины, человек
+    // оставался бы там же — среди карточек прежнего расписания, ничего не
+    // поняв. Раньше этот вопрос решался сам собой, потому что после загрузки
+    // приложение переключало вкладку.
+    // Мгновенно, а не плавно: это сброс состояния, а не переход по странице.
+    // Сюда же должно приходить восстановление копии из хранилища, когда оно
+    // появится: требование к нему то же самое.
+    window.scrollTo(0, 0);
   }
 
   // ---------- no-data placeholder / errors ----------
