@@ -727,12 +727,45 @@
     /* Тень вверх, а не вниз: свет в приложении падает сверху, и у панели,
        стоящей у нижнего края, подсвечиваться должен верхний край. */
     box-shadow:0 -10px 28px rgba(31,45,68,.14);
-    /* Выезжает снизу — направление появления совпадает с краем, у которого
-       панель живёт. Сверху она бы будто прилетала мимо своего места. */
-    opacity:0;transform:translateY(8px);
-    transition:opacity .16s ease, transform .16s ease;
+    /* Начальное состояние — за краем экрана: панель выезжает оттуда, а не
+       проявляется на месте. Направление совпадает с краем, у которого она
+       живёт; на десктопе оно переворачивается вместе с ней (см. ниже). */
+    opacity:0;transform:translateY(120%);
   }
-  .scroll-filters.visible{display:flex;opacity:1;transform:none}
+  /* Появление — выезд из-за своего края, 660мс. Медленнее обычного для
+     интерфейса намеренно: панель выезжает во время прокрутки, когда глаз занят
+     списком, и на быстром движении её легко не заметить вовсе.
+     Исчезновение — сжатие лентой к середине, 280мс: уходит она быстрее, чем
+     приходит, потому что уход не нужно разглядывать.
+     Анимации, а не переходы: у панели меняется display, и переход от него не
+     запускается — состояние появляется сразу целиком. */
+  @keyframes sf-in{
+    from{opacity:0;transform:translateY(120%)}
+    to{opacity:1;transform:none}
+  }
+  /* transform:none в обоих кадрах обязателен. Без него на время ухода берётся
+     начальное состояние панели — «за краем экрана», — и она прыгает туда,
+     прежде чем сжаться. Уходя, панель остаётся на своём месте. */
+  @keyframes sf-out{
+    from{opacity:1;transform:none;clip-path:inset(0 0 0 0 round var(--radius-lg))}
+    to{opacity:.3;transform:none;clip-path:inset(0 46% 0 46% round var(--radius-lg))}
+  }
+  .scroll-filters.visible{
+    display:flex;opacity:1;transform:none;
+    animation:sf-in .66s cubic-bezier(.22,.61,.36,1) both;
+  }
+  /* Пока панель уходит, она ещё нарисована: класс снят, но display держится
+     до конца анимации — его снимает JS по её окончании. */
+  .scroll-filters.hiding{
+    display:flex;
+    animation:sf-out .28s cubic-bezier(.22,.61,.36,1) both;
+  }
+  /* Кому система запретила движение, тот получает панель сразу на месте.
+     Класс ухода при этом не ставится вовсе — иначе он ждал бы события конца
+     анимации, которого не будет. */
+  @media (prefers-reduced-motion:reduce){
+    .scroll-filters.visible{animation:none}
+  }
 
   /* На десктопе панель возвращается к верхнему краю. Нижний край выбран для
      телефона, где до него ближе большим пальцем, — за мышью тянуться некуда,
@@ -745,8 +778,16 @@
     .scroll-filters{
       top:16px;bottom:auto;
       box-shadow:0 10px 28px rgba(31,45,68,.14);
-      transform:translateY(-8px);
+      transform:translateY(-120%);
     }
+    /* Выезд переворачивается вместе с панелью: она приходит из-за верхнего
+       края, у которого теперь живёт. Уход — тот же, сжатием: он к краю не
+       привязан. */
+    @keyframes sf-in-top{
+      from{opacity:0;transform:translateY(-120%)}
+      to{opacity:1;transform:none}
+    }
+    .scroll-filters.visible{animation-name:sf-in-top}
   }
   /* Пока панель видна, странице добавляется место под неё. Иначе в самом низу
      подпись «© Difeex» уходит под панель целиком — замерено, перекрытие ровно
@@ -3294,6 +3335,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       el.scrollFilters.style.left = Math.round(r.left) + 'px';
       el.scrollFilters.style.width = w + 'px';
       // Класс ставится до замеров: у скрытой панели все размеры нулевые.
+      // Панель могла не досмотреть свой уход — возвращаем её немедленно.
+      el.scrollFilters.classList.remove('hiding');
       el.scrollFilters.classList.add('visible');
       el.app.classList.add('panel-space');
       // \u0001 — разделитель, который не встретится в названии фильтра, иначе
@@ -3315,7 +3358,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     shownStage = '';
     lastCollapseKey = '';
-    el.scrollFilters.classList.remove('visible');
+    // Уход показывается только при переходе из видимого состояния: событие
+    // прокрутки приходит на каждый кадр, и без этой проверки класс ухода
+    // навешивался бы снова и снова, перезапуская анимацию.
+    if(el.scrollFilters.classList.contains('visible')){
+      el.scrollFilters.classList.remove('visible');
+      if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+        el.scrollFilters.classList.remove('hiding');
+      } else {
+        el.scrollFilters.classList.add('hiding');
+      }
+    }
     el.app.classList.remove('panel-space');
   }
 
@@ -3893,6 +3946,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.emptyResetBtn.addEventListener('click', resetAll);
     // Делегирование: чип сброса пересоздаётся при каждой перерисовке, а сам
     // список — нет.
+    // Конец ухода: класс снимается, панель перестаёт рисоваться. Имя
+    // проверяется потому, что до этого события доходит и анимация появления.
+    el.scrollFilters.addEventListener('animationend', function(ev){
+      if(ev.target === el.scrollFilters && ev.animationName === 'sf-out'){
+        el.scrollFilters.classList.remove('hiding');
+      }
+    });
     el.scrollFiltersList.addEventListener('click', function(ev){
       if(ev.target.closest('.cf-reset')) resetAll();
     });
