@@ -286,18 +286,6 @@
   .icon-btn:hover{color:var(--text);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
   .icon-btn svg{width:18px;height:18px}
 
-  /* ---------- Mobile tabs ---------- */
-  /* Радиус как у шапки: обе полосы — обрамление страницы, и овальная форма
-     выбивала их из общего ряда со скруглёнными прямоугольниками.
-     У кнопок внутри радиус меньше ровно на отступ контейнера (18 − 6 = 12):
-     так внутреннее скругление концентрично внешнему, а не спорит с ним. */
-  .mobile-tabs{display:none;gap:8px;padding:6px;border-radius:var(--radius-lg)}
-  .tab-btn{
-    flex:1;border:none;background:transparent;padding:10px 14px;border-radius:12px;
-    font-weight:600;font-size:14px;color:var(--text-muted);cursor:pointer;
-  }
-  .tab-btn.active{background:var(--surface-strong);color:var(--text);box-shadow:var(--shadow-sm)}
-
   /* ---------- Layout ---------- */
   /* Отступ между рядами 14px, а не 16: во втором ряду стоит подпись под правой
      панелью, и он должен совпадать с отступом легенды от календаря, чтобы обе
@@ -1248,12 +1236,12 @@
        space-between — оно разносило их по краям шапки, и пара действий
        читалась как два несвязанных элемента. */
     .topbar-actions{width:100%;justify-content:flex-end}
-    .mobile-tabs{display:flex}
+    /* Одна колонка: календарь, под ним список, под ним подпись — в порядке
+       разметки. Вкладок здесь больше нет, обе панели видны сразу. */
     .layout{grid-template-columns:minmax(0,1fr)}
     /* display:contents — колонка списка растворяется, и панель с подписью
-       становятся прямыми ячейками одноколоночной сетки. Так правила показа
-       вкладок продолжают работать по самой панели, а подпись встаёт под ней
-       своим рядом. */
+       становятся прямыми ячейками одноколоночной сетки: панель встаёт своим
+       рядом под календарём, подпись — своим под панелью. */
     .list-col{display:contents}
     /* Колонка одна, поэтому подпись переезжает в неё — иначе она осталась бы
        во второй колонке, которой здесь нет, и создала бы пустую.
@@ -1264,71 +1252,16 @@
        Фиксированные 12px, стоявшие здесь раньше, отставали от легенды на
        широком мобильном: при 840px она вырастала до 14px, подпись — нет. */
     .credit{grid-column:1;font-size:clamp(12px, calc(3.3vw - 0.92px), 14px)}
-    /* На вкладке календаря подписи нет вовсе. Рядом с легендой она не
-       помещается — при 375px легенда занимает 128px, подпись 239px, а свободно
-       341px, — а отдельной строкой под легендой смотрелась бы приписанной к
-       календарю. Место ей на вкладке списка, где она и остаётся. */
-    .app.tab-calendar .credit{display:none}
-    .calendar-col{display:none}
-    .panel.list-panel{display:none}
-    .app.tab-calendar .calendar-col{display:flex}
-    .app.tab-list .panel.list-panel{display:flex}
     .search-wrap{min-width:140px}
 
-    /* В пустом состоянии панели выравниваются по высоте и здесь — так же, как
-       на десктопе, где они видны рядом. Смысл другой: вкладки показывают их по
-       очереди, и без выравнивания переключение дёргает страницу, потому что
-       короткая панель списка вдвое ниже календаря.
-       Скрывать неактивную вкладку через display:none для этого нельзя: такой
-       элемент выпадает из раскладки, и его высоту сетке взять неоткуда. Поэтому
-       обе панели кладутся в одну ячейку — высота ряда становится максимумом из
-       двух, — а неактивная гасится видимостью. visibility:hidden убирает её и
-       от курсора, и от клавиатуры, и от чтения с экрана, так что вкладка
-       по-прежнему одна.
-       Только в пустом состоянии: с данными список бывает высотой в тысячи
-       пикселей, и накладывать на него календарь незачем. */
-    /* align-self:stretch нужен вместе с общей ячейкой: сетка выравнивает свои
-       элементы по верху (это её обычное правило, оно же держит прилипание
-       календаря на десктопе), и без растяжения обе панели остались бы каждая
-       при своей высоте. Растянутся обе, но высоту ряда задаёт более высокая,
-       то есть календарь: он остаётся при себе, а список дотягивается. */
-    .app.is-empty .calendar-col,
-    .app.is-empty .panel.list-panel{display:flex;grid-row:1;grid-column:1;align-self:stretch}
-    /* Подписи нужен свой ряд: панели теперь заняли первый явно, а без этого
-       она встала бы в ту же ячейку поверх них. */
-    .app.is-empty .credit{grid-row:2}
-    /* Легенда выносится из потока — ровно как на десктопе и по той же причине:
-       она лежит в колонке календаря, и без этого список тянулся бы до её низа,
-       оказываясь на 30px выше карточки календаря. Вне потока высоту ряда задаёт
-       только карточка, и панели совпадают.
-       Заодно совпадает и общая высота страницы на обеих вкладках: под панелями
-       остаются легенда и подпись — по строке одного кегля через один и тот же
-       отступ, — поэтому переключение вкладок больше ничего не двигает.
-       В пустом состоянии легенда — одна строка («Праздничные дни»), остальные
-       пункты появляются только с данными, так что 34px запаса снизу хватает. */
-    .app.is-empty .calendar-col{position:relative}
-    .app.is-empty .legend{position:absolute;top:calc(100% + 14px);left:0;right:0}
-    .app.is-empty .layout{padding-bottom:34px}
-    /* Панель здесь тоже стала выше своего содержимого, поэтому карточка так же,
-       как на десктопе, встаёт по центру автополями. Без этого она липла к
-       верхнему краю выросшей панели. Автополя делят только остаток, не занятый
-       чипом даты и плашкой праздника, — те остаются вверху. */
-    .app.is-empty .no-data-card{margin-top:auto;margin-bottom:auto}
-    .app.is-empty.tab-list .calendar-col,
-    .app.is-empty.tab-calendar .panel.list-panel{visibility:hidden}
-    /* Снять со скрытой панели размытие обязательно. backdrop-filter поднимает
-       её на отдельный слой композитора, и этот слой переживает
-       visibility:hidden: при быстром переключении вкладок содержимое списка
-       ещё секунду висело поверх календаря. Гасится только у спрятанной —
-       видимая панель остаётся стеклянной. */
-    .app.is-empty.tab-list .calendar-col .panel,
-    .app.is-empty.tab-calendar .panel.list-panel{
-      backdrop-filter:none;-webkit-backdrop-filter:none;
-    }
-  }
-  @media (min-width:861px){
-    .app.tab-calendar .calendar-col,
-    .app.tab-list .panel.list-panel{display:flex}
+    /* Ни выравнивания панелей по высоте, ни вынесения легенды из потока здесь
+       больше нет. Всё это существовало ради вкладок: они показывали панели по
+       очереди, и без выравнивания переключение дёргало страницу. Панели
+       клались в одну ячейку сетки, неактивная гасилась visibility:hidden, а с
+       неё ещё и снималось размытие — иначе слой композитора переживал гашение
+       и содержимое списка на секунду висело поверх календаря.
+       Показывать панели одну под другой проще: они и так идут своими рядами,
+       выравнивать нечего, а прятать нечего тем более. */
   }
   @media (max-width:480px){
     .event-title{font-size:13.5px}
@@ -1356,7 +1289,7 @@
 <div class="too-narrow-overlay" id="tooNarrowOverlay">
   <div class="too-narrow-card glass">Извините, но это разрешение не поддерживается для приложения.</div>
 </div>
-<div class="app tab-calendar" id="app">
+<div class="app" id="app">
 
   <header class="topbar glass">
     <div class="brand">
@@ -1410,11 +1343,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </div>
-
-  <nav class="mobile-tabs glass" id="mobileTabs">
-    <button class="tab-btn active" data-tab="calendar">Календарь</button>
-    <button class="tab-btn" data-tab="list">Список занятий</button>
-  </nav>
 
   <main class="layout">
     <div class="calendar-col">
@@ -1975,7 +1903,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'loadNotice','loadNoticeText','loadNoticeList','loadNoticeClose','uploadErrorClose',
      'confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
      'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
-     'dataStatus','mobileTabs','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
+     'dataStatus','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','searchInput','resetFilters',
      'calendarFilters','calendarFiltersList',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
@@ -2314,12 +2242,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // загрузку — она оставляет отметку и повторится при следующем запуске.
     saveScheduleQuietly();
     afterDataLoaded();
-    // On mobile the calendar and the list are separate tabs. After a
-    // successful load jump to the list, so the teacher immediately sees that
-    // the lessons from the file actually came through. Only here, not in
-    // afterDataLoaded() — restoring a stored file on startup should leave the
-    // user on the calendar.
-    if(window.matchMedia('(max-width:860px)').matches) setMobileTab('list');
   }
 
   // ---------- storage ----------
@@ -2840,12 +2762,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           var wasSelected = (filters.date === dk);
           filters.date = wasSelected ? null : dk;
           renderAll();
-          // На мобильном переход на список оправдан только когда дату ВЫБРАЛИ:
-          // человек спросил «что в этот день» и хочет увидеть ответ. Снятие
-          // выбора — обратное действие, оно возвращает список к полному виду,
-          // и уводить с календаря незачем: пользователь уже там и, судя по
-          // повторному нажатию, продолжает работать именно с календарём.
-          if(!wasSelected && window.matchMedia('(max-width:860px)').matches) setMobileTab('list');
         });
       })(dateKey);
 
@@ -3027,12 +2943,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function updateScrollFilters(){
-    // На десктопе панель уместна всегда, на мобильном — только на вкладке
-    // списка: на вкладке календаря сводка фильтров уже есть под сеткой, и
-    // вторая такая же поверх неё была бы дублированием. К тому же колонка
-    // списка там скрыта, и брать у неё геометрию нечего.
-    var wide = window.matchMedia('(min-width:861px)').matches;
-    var allowed = wide || el.app.classList.contains('tab-list');
+    // Прежде на мобильном панель разрешалась только на вкладке списка: на
+    // вкладке календаря сводка фильтров уже была под сеткой, и вторая такая же
+    // поверх неё дублировала бы её. Вкладок больше нет, панель разрешена
+    // везде — но сводка под календарём никуда не делась, и теперь они видны
+    // одновременно. Это открытый вопрос, а не решённый: см. .calendar-filters.
+    var allowed = true;
     // Панель заменяет собой уехавшую вверх полосу фильтров, поэтому смысл она
     // имеет только когда полоса вообще есть. Высоту проверяем до положения:
     // у скрытой полосы прямоугольник нулевой, и bottom:0 без этой проверки
@@ -3473,16 +3389,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   // ---------- mobile tabs ----------
-  function setMobileTab(tab){
-    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===tab); });
-    el.app.classList.remove('tab-calendar','tab-list');
-    el.app.classList.add('tab-'+tab);
-    // Плавающая панель зависит от того, какая вкладка открыта. Без пересчёта
-    // прямо здесь она осталась бы висеть от прежней вкладки: прокрутка не
-    // менялась, а значит своего события мы бы не дождались.
-    updateScrollFilters();
-  }
-
   // ---------- wiring ----------
   function bindStaticEvents(){
     el.uploadBtn.addEventListener('click', function(){ el.fileInput.click(); });
@@ -3561,11 +3467,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // answers "what do I have today?" straight away.
       filters.date = formatDateKeyLocal(n);
       renderAll();
-    });
-
-    el.mobileTabs.addEventListener('click', function(e){
-      var btn = e.target.closest('.tab-btn');
-      if(btn) setMobileTab(btn.dataset.tab);
     });
 
     el.searchInput.addEventListener('input', function(e){
