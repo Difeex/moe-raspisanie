@@ -2996,8 +2996,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   // Заполняет контейнер нечитаемыми-на-нажатие чипами. Сброс — отдельным
-  // элементом в конце, чтобы не разрывать перечисление.
-  function fillFilterChips(container, parts, resetId){
+  // элементом в конце, чтобы не разрывать перечисление, и только когда его
+  // просят: на первой ступени панели полоса фильтров ещё на экране, и своя
+  // кнопка сброса у человека уже есть.
+  function fillFilterChips(container, parts, resetId, withReset){
     container.innerHTML = '';
     parts.forEach(function(p){
       var chip = document.createElement('span');
@@ -3008,7 +3010,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       chip.title = p.full;
       container.appendChild(chip);
     });
-    if(parts.length){
+    if(parts.length && withReset){
       var reset = document.createElement('button');
       reset.type = 'button';
       reset.className = 'cf-reset';
@@ -3156,7 +3158,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // и лишняя работа, и сброс уже посчитанного сворачивания.
       if(stage !== shownStage){
         shownParts = parts;
-        fillFilterChips(el.scrollFiltersList, parts, 'scrollFiltersReset');
+        // «Сбросить» набирается накопительно, наравне с чипами: на ступени
+        // 'date' полоса фильтров ещё видна на 180px ниже, и кнопка в панели
+        // повторяла бы ту, что стоит в самой полосе. Заодно чипу даты
+        // достаётся её ширина — в панели она стоит 103px из 242.
+        fillFilterChips(el.scrollFiltersList, parts, 'scrollFiltersReset', stage === 'all');
         shownStage = stage;
         lastCollapseKey = '';
       }
