@@ -3296,11 +3296,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // Класс ставится до замеров: у скрытой панели все размеры нулевые.
       el.scrollFilters.classList.add('visible');
       el.app.classList.add('panel-space');
-      // Место под панель: её высота плюс тот же отступ сверху, что у неё снизу
-      // от края экрана. Замер после класса visible — у скрытой панели высота
-      // нулевая.
-      var space = Math.round(el.scrollFilters.getBoundingClientRect().height) + SF_EDGE * 2;
-      el.app.style.setProperty('--panel-space', space + 'px');
       // \u0001 — разделитель, который не встретится в названии фильтра, иначе
       // два разных набора могли бы дать одинаковый ключ.
       var key = w + '|' + parts.map(function(p){ return p.text; }).join('\u0001');
@@ -3308,6 +3303,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         collapseScrollFilters();
         lastCollapseKey = key;
       }
+      // Место под панель: её высота плюс тот же отступ сверху, что у неё снизу
+      // от края экрана. Замер после класса visible — у скрытой панели высота
+      // нулевая — и обязательно после сворачивания: до него чипы стоят в
+      // столько рядов, сколько их пришло, и панель бывает вдвое выше себя
+      // самой. Замеренный в этот момент запас так и оставался внизу страницы
+      // до следующего кадра прокрутки: замерено 151px под панелью в 53.
+      var space = Math.round(el.scrollFilters.getBoundingClientRect().height) + SF_EDGE * 2;
+      el.app.style.setProperty('--panel-space', space + 'px');
       return;
     }
     shownStage = '';
