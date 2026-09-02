@@ -1466,7 +1466,7 @@
   </div>
 
   <main class="layout">
-    <div class="calendar-col">
+    <div class="calendar-col" id="calendarCol">
       <section class="panel calendar-panel glass" id="calendarPanel">
         <div class="calendar-header">
           <button class="icon-btn" id="prevMonth" aria-label="Предыдущий месяц">
@@ -2035,7 +2035,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'loadNotice','loadNoticeText','loadNoticeList','loadNoticeClose','uploadErrorClose',
      'confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
      'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
-     'dataStatus','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
+     'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'calendarFilters','calendarFiltersList',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
@@ -3053,9 +3053,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // сбрасывается и когда панель скрывается.
   var lastCollapseKey = '';
 
+  // Панель набирается в два приёма, и показанное не всегда равно набранному.
+  // shownStage — что сейчас в панели: '' ничего, 'date' одна дата, 'all' всё.
+  // shownParts — те самые части, по индексам которых сворачивание собирает
+  // подсказку «ещё N»; полный scrollFiltersParts для этого не годится, когда
+  // показана только дата.
+  var shownStage = '';
+  var shownParts = [];
+
+  // Что показывать на этой ступени. Дата в activeFilterParts всегда первая —
+  // на этом и держится деление.
+  function partsForStage(stage){
+    if(stage === 'all') return scrollFiltersParts;
+    if(stage === 'date' && filters.date && scrollFiltersParts.length) return [scrollFiltersParts[0]];
+    return [];
+  }
+
   function renderScrollFilters(parts){
     scrollFiltersParts = parts || activeFilterParts();
-    fillFilterChips(el.scrollFiltersList, scrollFiltersParts, 'scrollFiltersReset');
+    // Состав фильтров изменился — показанное устарело в любом случае.
+    shownStage = '';
     lastCollapseKey = '';
     updateScrollFilters();
   }
@@ -3103,7 +3120,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       for(var i = chips.length - 1; i >= 1; i--){
         chips[i].style.display = 'none';
         // В подсказке счётчика — полные тексты: сокращать дважды бессмысленно.
-        hidden.unshift(scrollFiltersParts[i].full);
+        hidden.unshift(shownParts[i].full);
         // Со строчной: это не название фильтра, а продолжение перечисления —
         // прописная сделала бы счётчик равным по весу соседним чипам.
         more.textContent = 'ещё ' + hidden.length;
@@ -3118,38 +3135,62 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   function updateScrollFilters(){
-    // Прежде на мобильном панель разрешалась только на вкладке списка: на
-    // вкладке календаря сводка фильтров уже была под сеткой, и вторая такая же
-    // поверх неё дублировала бы её. Вкладок больше нет, панель разрешена
-    // везде — но сводка под календарём никуда не делась, и теперь они видны
-    // одновременно. Это открытый вопрос, а не решённый: см. .calendar-filters.
-    var allowed = true;
-    // Панель заменяет собой уехавшую вверх полосу фильтров, поэтому смысл она
-    // имеет только когда полоса вообще есть. Высоту проверяем до положения:
-    // у скрытой полосы прямоугольник нулевой, и bottom:0 без этой проверки
-    // читался бы как «полоса уже за верхним краем». Так и происходило в пустом
-    // состоянии — файл не загружен, полосы нет, но стоило выбрать дату, как
-    // над шапкой всплывала панель с чипом даты, хотя прокручивать нечего.
+    // Панель набирается накопительно, в две ступени. Прежде она появлялась
+    // разом и только когда за верх экрана уходила полоса фильтров — на узком
+    // экране это значило, что прокрутив один календарь, человек уже потерял
+    // из виду выбранный день, а панель ещё молчит.
+    //
+    //   'date' — календарь ушёл вверх: показываем выбранный день и «наверх»;
+    //   'all'  — следом ушла и полоса фильтров: добавляем к дате её чипы.
+    //
+    // На десктопе ступень одна. Там календарь прилипает и никуда не уходит, а
+    // полоса фильтров стоит вровень с его верхом — делить нечего.
+    //
+    // Высоту проверяем до положения: у скрытого элемента прямоугольник
+    // нулевой, и bottom:0 без этой проверки читался бы как «уже за верхним
+    // краем». Так и было в пустом состоянии — файла нет, полосы фильтров нет,
+    // но стоило выбрать дату, как панель всплывала над шапкой.
+    var wide = window.matchMedia('(min-width:861px)').matches;
     var bar = el.filterBar.getBoundingClientRect();
     var barGone = bar.height > 0 && bar.bottom < SCROLL_PANEL_TOP;
-    var show = allowed && scrollFiltersParts.length > 0 && barGone;
-    if(show){
-      // Панель прижата к колонке списка, а не к окну: слева от неё календарь.
+
+    var stage = '';
+    if(barGone){
+      stage = 'all';
+    } else if(!wide){
+      var cal = el.calendarCol.getBoundingClientRect();
+      if(cal.height > 0 && cal.bottom < SCROLL_PANEL_TOP) stage = 'date';
+    }
+
+    var parts = partsForStage(stage);
+    if(stage && parts.length){
+      // Содержимое перерисовывается только на смене ступени: событие прокрутки
+      // приходит на каждый кадр, а собирать чипы заново на каждый кадр — это
+      // и лишняя работа, и сброс уже посчитанного сворачивания.
+      if(stage !== shownStage){
+        shownParts = parts;
+        fillFilterChips(el.scrollFiltersList, parts, 'scrollFiltersReset');
+        shownStage = stage;
+        lastCollapseKey = '';
+      }
+      // Панель прижата к колонке списка, а не к окну: на десктопе слева от неё
+      // календарь.
       var r = el.listPanel.getBoundingClientRect();
       var w = Math.round(r.width);
       el.scrollFilters.style.left = Math.round(r.left) + 'px';
       el.scrollFilters.style.width = w + 'px';
       // Класс ставится до замеров: у скрытой панели все размеры нулевые.
       el.scrollFilters.classList.add('visible');
-      //  — разделитель, который не встретится в названии фильтра, иначе
+      // \u0001 — разделитель, который не встретится в названии фильтра, иначе
       // два разных набора могли бы дать одинаковый ключ.
-      var key = w + '|' + scrollFiltersParts.map(function(p){ return p.text; }).join('\u0001');
+      var key = w + '|' + parts.map(function(p){ return p.text; }).join('\u0001');
       if(key !== lastCollapseKey){
         collapseScrollFilters();
         lastCollapseKey = key;
       }
       return;
     }
+    shownStage = '';
     lastCollapseKey = '';
     el.scrollFilters.classList.remove('visible');
   }
