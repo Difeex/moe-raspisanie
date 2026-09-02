@@ -702,45 +702,6 @@
      подписи. Теперь сверху ровно столько же, сколько снизу. Значение здесь —
      запасное, на случай если панель показалась раньше первого замера. */
   .app.panel-space{padding-bottom:var(--panel-space,96px)}
-  /* Чип приезжает справа и уезжает вправо. Направление не украшение, а
-     объяснение: перечисление растёт вправо, значит новое приходит оттуда, куда
-     оно продолжается, и туда же уходит, когда перестаёт действовать. Смещение
-     маленькое — 10px: панель узкая, и крупный сдвиг читался бы как переезд по
-     плашке, а не как появление.
-
-     Едут по горизонтали, а не снизу: сама панель выезжает снизу, и повторять
-     её направление внутри значило бы показать одно движение дважды.
-
-     Ещё довод за translateX: сворачивание в «ещё N» считает перенос строки по
-     getBoundingClientRect().top, а горизонтальный сдвиг вертикальную геометрию
-     не меняет — анимация замерам не мешает и может идти прямо во время них.
-
-     Анимация, а не переход: чип приходит уже созданным, переходить ему не от
-     чего. both оставляет конечное состояние, иначе после проигрывания чип
-     прыгнул бы обратно на 10px.
-
-     Классы, а не правило на всех детей: анимацию получает только тот чип,
-     который сейчас появился или уходит. Стоящие не трогаются вовсе — их узлы
-     переживают обновление панели и не проезжают второй раз. Задержку каскада
-     ставит JS: она считается по числу новых, а не по месту в строке. */
-  @keyframes cf-chip-in{
-    from{opacity:0;transform:translateX(10px)}
-    to{opacity:1;transform:none}
-  }
-  @keyframes cf-chip-out{
-    from{opacity:1;transform:none}
-    to{opacity:0;transform:translateX(10px)}
-  }
-  .scroll-filters .cf-list > .cf-enter{animation:cf-chip-in .18s ease-out both}
-  /* Уходящий чип нажимать нельзя: он уже не существует по смыслу. */
-  .scroll-filters .cf-list > .cf-leave{animation:cf-chip-out .16s ease-in both;pointer-events:none}
-  /* Кому система запретила анимации, тот получает готовую панель сразу.
-     Уходящие узлы при этом удаляются в JS, не дожидаясь конца анимации,
-     которой не будет. */
-  @media (prefers-reduced-motion:reduce){
-    .scroll-filters .cf-list > .cf-enter,
-    .scroll-filters .cf-list > .cf-leave{animation:none}
-  }
   /* min-width:0 обязателен: без него длинный поисковый чип распирает панель
      шире колонки списка. */
   .scroll-filters .cf-list{flex:1;min-width:0}
@@ -3051,114 +3012,32 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return cut.replace(/[\s,;:.]+$/, '') + '…';
   }
 
-  // Обновляет чипы панели, а не собирает их заново. Разница видна глазом:
-  // при пересборке весь набор исчезал и появлялся разом, хотя менялась в нём
-  // пара чипов. Теперь уже стоящий чип — тот же самый узел: он не мигает и не
-  // проезжает второй раз, самое большее ужимается, когда места не хватает.
-  // Приезжают только новые, и по одному; уходят только исчезнувшие.
-  //
-  // Ключ чипа — полный текст, а не показанный: подпись обрезается по ширине и
-  // по длине, а сравнивать надо то, что чип означает.
-  //
-  // Сброс — отдельным элементом в конце, чтобы не разрывать перечисление, и
-  // только когда его просят: на первой ступени панели полоса фильтров ещё на
-  // экране, и своя кнопка сброса у человека уже есть.
-  var CHIP_STEP = 30;   // каскад: столько миллисекунд между соседними чипами
-  function syncFilterChips(container, parts, withReset){
-    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var leaving = 0;
-
-    // Проводить узел к выходу. Он остаётся в разметке, пока уезжает, но из
-    // всех подсчётов уже выбыл: сворачивание его не считает, нажать нельзя.
-    function drop(node){
-      if(node.classList.contains('cf-leave')) return;
-      node.classList.remove('cf-enter');
-      node.classList.add('cf-leave');
-      // Уехать может только видимый чип. У спрятанного сворачиванием (он уже
-      // свёрнут в «ещё N») анимация не идёт и событие её окончания не придёт —
-      // такой узел висел бы в разметке до самого скрытия панели. Из виду он и
-      // так пропал, поэтому убираем сразу. Тем же путём уходят все узлы, когда
-      // человеку анимации запрещены системой.
-      if(reduced || node.style.display === 'none'){
-        node.style.animationDelay = '';
-        if(node.parentNode) node.parentNode.removeChild(node);
-        return;
-      }
-      node.style.animationDelay = (leaving++ * CHIP_STEP) + 'ms';
-      node.addEventListener('animationend', function(){
-        if(node.parentNode) node.parentNode.removeChild(node);
-      });
-    }
-
-    // Что стоит сейчас. Уезжающие в расчёт не берём: их место уже свободно.
-    var live = {};
-    Array.prototype.slice.call(container.children).forEach(function(node){
-      if(node.classList.contains('cf-leave')) return;
-      if(node.classList.contains('cf-more') || node.classList.contains('cf-reset')) return;
-      live[node.getAttribute('data-key')] = node;
-    });
-
-    var order = [], newcomers = 0;
+  // Заполняет контейнер нечитаемыми-на-нажатие чипами. Сброс — отдельным
+  // элементом в конце, чтобы не разрывать перечисление, и только когда его
+  // просят: на первой ступени панели полоса фильтров ещё на экране, и своя
+  // кнопка сброса у человека уже есть.
+  function fillFilterChips(container, parts, resetId, withReset){
+    container.innerHTML = '';
     parts.forEach(function(p){
-      var node = live[p.full];
-      if(node){
-        delete live[p.full];
-        // Подпись могла обрезаться иначе — ширина панели меняется вместе с окном.
-        if(node.textContent !== p.text) node.textContent = p.text;
-      } else {
-        node = document.createElement('span');
-        node.className = 'cf-chip cf-enter';
-        node.setAttribute('data-key', p.full);
-        node.textContent = p.text;
-        // В подсказке — полный текст: и когда его обрезало правило по символам,
-        // и когда обрезала ширина экрана.
-        node.title = p.full;
-        if(!reduced) node.style.animationDelay = (newcomers * CHIP_STEP) + 'ms';
-        // Класс снимается по окончании: иначе чип, переставленный в разметке
-        // при следующем обновлении, проехал бы ещё раз.
-        node.addEventListener('animationend', function(){
-          node.classList.remove('cf-enter');
-          node.style.animationDelay = '';
-        });
-        newcomers++;
-      }
-      order.push(node);
+      var chip = document.createElement('span');
+      chip.className = 'cf-chip';
+      chip.textContent = p.text;
+      // В подсказке — полный текст: и когда его обрезало правило по символам,
+      // и когда обрезала ширина экрана.
+      chip.title = p.full;
+      container.appendChild(chip);
     });
-
-    // Всё, что осталось в live, из перечисления выбыло.
-    Object.keys(live).forEach(function(k){ drop(live[k]); });
-
-    var reset = container.querySelector('.cf-reset:not(.cf-leave)');
-    if(parts.length && withReset && !reset){
-      reset = document.createElement('button');
+    if(parts.length && withReset){
+      var reset = document.createElement('button');
       reset.type = 'button';
-      reset.className = 'cf-reset cf-enter';
+      reset.className = 'cf-reset';
+      reset.id = resetId;
       reset.title = 'Сбросить все фильтры';
       reset.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
         'stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>' +
         '<path d="M14.8 9.2l-5.6 5.6M9.2 9.2l5.6 5.6"/></svg><span>Сбросить</span>';
-      // Кнопка приезжает последней: она стоит в конце перечисления.
-      if(!reduced) reset.style.animationDelay = (newcomers * CHIP_STEP) + 'ms';
-      reset.addEventListener('animationend', function(){
-        reset.classList.remove('cf-enter');
-        reset.style.animationDelay = '';
-      });
       container.appendChild(reset);
-    } else if(reset && (!withReset || !parts.length)){
-      drop(reset);
-      reset = null;
     }
-
-    // Расставляем живые узлы по порядку. Переставляем только тех, кто стоит не
-    // на своём месте: перемещение в разметке перезапустило бы анимацию.
-    // Уезжающие при этом вытесняются в конец — и это правильно, они как раз
-    // уезжают вправо.
-    var prev = null;
-    order.forEach(function(node){
-      var target = prev ? prev.nextSibling : container.firstChild;
-      if(node !== target) container.insertBefore(node, target);
-      prev = node;
-    });
   }
 
   // ---------- плавающая панель фильтров над списком ----------
@@ -3211,9 +3090,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // единственные действия панели.
   function collapseScrollFilters(){
     var list = el.scrollFiltersList;
-    // Уезжающие чипы в расчёт не идут: их место уже освободилось, и считать
-    // по ним перенос строки значило бы прятать лишнее.
-    var chips = Array.prototype.slice.call(list.querySelectorAll('.cf-chip:not(.cf-more):not(.cf-leave)'));
+    var chips = Array.prototype.slice.call(list.querySelectorAll('.cf-chip:not(.cf-more)'));
     if(!chips.length) return;
 
     var more = list.querySelector('.cf-more');
@@ -3223,9 +3100,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
     // Вылезшим считается элемент, оказавшийся ниже первой строки.
     function wrapped(){
-      var visible = Array.prototype.slice.call(list.children).filter(function(k){
-        return k.style.display !== 'none' && !k.classList.contains('cf-leave');
-      });
+      var visible = Array.prototype.slice.call(list.children).filter(function(k){ return k.style.display !== 'none'; });
       if(visible.length < 2) return false;
       var base = visible[0].getBoundingClientRect().top;
       for(var i=1;i<visible.length;i++){
@@ -3245,7 +3120,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // ещё один чип, иначе цикл остановился бы на шаг раньше нужного.
       more = document.createElement('span');
       more.className = 'cf-chip cf-more';
-      var reset = list.querySelector('.cf-reset:not(.cf-leave)');
+      var reset = list.querySelector('.cf-reset');
       list.insertBefore(more, reset || null);
 
       for(var i = chips.length - 1; i >= 1; i--){
@@ -3304,7 +3179,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         // 'date' полоса фильтров ещё видна на 180px ниже, и кнопка в панели
         // повторяла бы ту, что стоит в самой полосе. Заодно чипу даты
         // достаётся её ширина — в панели она стоит 103px из 242.
-        syncFilterChips(el.scrollFiltersList, parts, stage === 'all');
+        fillFilterChips(el.scrollFiltersList, parts, 'scrollFiltersReset', stage === 'all');
         shownStage = stage;
         lastCollapseKey = '';
       }
@@ -3335,12 +3210,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     lastCollapseKey = '';
     el.scrollFilters.classList.remove('visible');
     el.app.classList.remove('panel-space');
-    // Список очищается вместе с уходом панели: когда она вернётся, содержимое
-    // должно набраться заново, чип за чипом. Оставь мы узлы на месте — при
-    // следующем показе они оказались бы там все разом и без движения. Заодно
-    // это убирает узлы, не успевшие доиграть уход: у скрытой панели событие
-    // окончания анимации не приходит, и они висели бы в разметке.
-    if(el.scrollFiltersList.firstChild) el.scrollFiltersList.innerHTML = '';
   }
 
   // ---------- list ----------
