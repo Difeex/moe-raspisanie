@@ -1876,6 +1876,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Март, Май, Июнь и Июль коротки сами по себе, сокращать их нечем.
   var MONTHS_SHORT = ['Янв.','Фев.','Март','Апр.','Май','Июнь','Июль','Авг.','Сент.','Окт.','Нояб.','Дек.'];
   var MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  // Те же короткие написания в родительном падеже — для чипа даты в плавающей
+  // панели. Сокращения взяты один в один из MONTHS_SHORT, чтобы «10 сент.» в
+  // панели и «Сент. 2026» между стрелками календаря были сокращены по одному
+  // правилу, а не каждое по-своему. Март, май, июнь и июль коротки сами по
+  // себе — они остаются полными, и точки после них нет: слово не обрывалось.
+  var MONTHS_GEN_SHORT = ['янв.','фев.','марта','апр.','мая','июня','июля','авг.','сент.','окт.','нояб.','дек.'];
 
   // ---------- state ----------
   var events = [];
@@ -2127,6 +2133,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function firstWeekdayOffset(year, monthIndex){ var dow = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay(); return (dow+6)%7; }
   function formatDayHeading(dateObj, dayShort){
     return dayShort+', '+dateObj.getUTCDate()+' '+MONTHS_GEN[dateObj.getUTCMonth()];
+  }
+  // Тот же заголовок дня, но месяцем в коротком написании. Нужен одной
+  // плавающей панели: она всегда в одну строку, и место, занятое датой,
+  // отбирается у чипов фильтров — при полном месяце их вытесняло в «ещё N».
+  // Везде, где строка не борется за ширину — заголовки дней в списке, чип даты
+  // в панели, — месяц остаётся полным.
+  function formatDayHeadingShort(dateObj, dayShort){
+    return dayShort+', '+dateObj.getUTCDate()+' '+MONTHS_GEN_SHORT[dateObj.getUTCMonth()];
   }
   function bucketWorkType(text){
     // Пустая ячейка — не «Другое». «Другое» значит «вид есть, но незнакомый»,
@@ -2955,7 +2969,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       for(var si=0; si<events.length; si++){
         if(events[si].dateKey === filters.date){ sameDay = events[si]; break; }
       }
-      parts.push(formatDayHeading(d, sameDay ? sameDay.day : weekdayShort(d)));
+      var dayName = sameDay ? sameDay.day : weekdayShort(d);
+      // В самом чипе месяц короткий, в подсказке — полный: сокращение экономит
+      // ширину, а не прячет сведения.
+      parts.push({ text: formatDayHeadingShort(d, dayName), full: formatDayHeading(d, dayName) });
     }
     WORK_ORDER.forEach(function(b){
       if(filters.workTypes.has(b)) parts.push(WORK_META[b].label);
