@@ -4772,6 +4772,40 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      которого в нашей схеме нет и не будет. */
 
   var NOTES_FILE = 'notes.json';
+  /* Что мы видели в хранилище при последнем удачном обмене.
+
+     Без этого запись наверх не может отличить два совершенно разных случая, и
+     во втором молча теряет чужую заметку.
+
+     Первый: я правил заметку, которую видел. Тогда моя версия честно новее, и
+     записать её поверх правильно.
+
+     Второй: я написал заметку на день, о котором на этом устройстве ничего не
+     знали. Она тоже «новее» по времени — но это ничего не значит: я не спорил
+     с чужой заметкой, я о ней не подозревал. Записать её поверх значит стереть
+     то, чего никто не видел.
+
+     Отличаются они сравнением с этим слепком: изменилось ли чужое с тех пор,
+     как мы в последний раз сходились. */
+  var NOTES_BASE_KEY = 'educal.notes.base.v1';
+
+  function readNotesBase(){
+    try{
+      var raw = localStorage.getItem(NOTES_BASE_KEY);
+      return raw ? validNotes(JSON.parse(raw)) : {};
+    }catch(e){ return {}; }
+  }
+
+  function saveNotesBase(state){
+    storageWrite(NOTES_BASE_KEY, JSON.stringify(state));
+  }
+
+  // Совпадает ли запись с той, что была при последнем обмене.
+  function sameNote(a, b){
+    if(!a && !b) return true;
+    if(!a || !b) return false;
+    return a.text === b.text && a.updatedAt === b.updatedAt;
+  }
   var NOTES_SYNC_DELAY = 60000;
   // Если правки копятся дольше этого срока, слияние происходит, не дожидаясь
   // тишины: человек может писать заметки на неделю вперёд полчаса подряд, и
@@ -4836,20 +4870,63 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      общий, и запись «своим состоянием поверх» стёрла бы в нём заметки, которые
      туда положило другое устройство. Поэтому в файл кладётся объединение, а
      приложение остаётся при своём. */
+  function pushMerge(remote){
+    var base = readNotesBase(), out = {}, отложено = [], k;
+    // Начинаем с чужого: всё, что там лежит, остаётся на месте, пока мы не
+    // получим права это менять.
+    for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) out[k] = remote[k];
+
+    Object.keys(notes).forEach(function(k){
+      var своё = notes[k], чужое = remote[k];
+      // Дня у них нет — просто добавляем свой.
+      if(!чужое){ out[k] = своё; return; }
+      // Чужое изменилось с прошлого обмена: значит с другого устройства сюда
+      // писали, а мы этого не видели. Не трогаем — разберётся человек, когда
+      // нажмёт «свести», и увидит оба текста.
+      if(!sameNote(base[k], чужое)){ отложено.push(k); return; }
+      // Чужое с прошлого обмена не менялось — значит наша правка сделана
+      // поверх того же, что там лежит, и заменить её можно.
+      if((своё.updatedAt || '') > (чужое.updatedAt || '')) out[k] = своё;
+    });
+    return { out: out, отложено: отложено };
+  }
+
   function syncPushNotes(opts){
     if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    var записано = null, отложено = [];
     return updateFile(NOTES_FILE, 'Заметки к дням', function(current){
       var remote = {};
       if(current){
         try{ remote = validNotes(JSON.parse(current)); }
         catch(e){ /* нечитаемое содержимое замещается нашим */ }
       }
-      var text = JSON.stringify(mergeNotes(notes, remote).notes, null, 1);
+      var разбор = pushMerge(remote);
+      записано = разбор.out;
+      отложено = разбор.отложено;
+      var text = JSON.stringify(записано, null, 1);
       // Совпало — не пишем вовсе. Без этого каждое открытие приложения давало
       // бы коммит в чужом хранилище на ровном месте.
-      return current === text ? null : text;
+      if(current === text){ return null; }
+      return text;
     }, opts).then(function(res){
       if(res && res.sha) saveSyncState({ notesSha: res.sha });
+      /* Слепок обновляется и когда записи не потребовалось: мы всё равно
+         видели содержимое файла.
+
+         Но дни, которые мы не тронули из-за чужой правки, в слепок не идут.
+         Слепок значит «это мы приняли», а мы её не принимали — мы её обошли.
+         Запиши её сюда, и при сведении спор пропадёт: выйдет, что чужое
+         известно, а раз наше новее, то оно и правее. Человек так и не узнает,
+         что на этот день была вторая заметка. */
+      if(записано){
+        var прежний = readNotesBase(), слепок = {}, k;
+        for(k in записано) if(Object.prototype.hasOwnProperty.call(записано, k)) слепок[k] = записано[k];
+        отложено.forEach(function(k){
+          if(прежний[k]) слепок[k] = прежний[k];
+          else delete слепок[k];
+        });
+        saveNotesBase(слепок);
+      }
       notesDirtySince = 0;
       saveSyncState({ lastSyncAt: new Date().toISOString() });
       return true;
@@ -4880,29 +4957,35 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         try{ remote = validNotes(JSON.parse(file.text)); }
         catch(e){ throw syncError('unknown'); }
       }
-      var incoming = 0, outgoing = 0, conflicts = 0, чужаяПравка = '';
+      var base = readNotesBase();
+      var incoming = 0, outgoing = 0, споры = [], чужаяПравка = '';
       var ключи = {}, k;
       for(k in notes) if(Object.prototype.hasOwnProperty.call(notes, k)) ключи[k] = true;
       for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) ключи[k] = true;
 
-      Object.keys(ключи).forEach(function(k){
+      Object.keys(ключи).sort().forEach(function(k){
         var l = notes[k], r = remote[k];
         if(r && r.updatedAt > чужаяПравка) чужаяПравка = r.updatedAt;
         if(!r){ if(l && l.text) outgoing++; return; }
         if(!l){ if(r.text) incoming++; return; }
-        var lt = l.updatedAt || '', rt = r.updatedAt || '';
-        if(rt > lt){
-          // Чужая правка новее. Считаем её приездом, а если она перепишет
-          // написанное здесь — ещё и заменой.
-          if(l.text !== r.text){
-            incoming++;
-            if(l.text) conflicts++;
-          }
-        } else if(lt > rt && l.text !== r.text){
-          outgoing++;
+        if(l.text === r.text) return;
+
+        // День спорный, если обе стороны писали в него, не видя друг друга:
+        // чужое изменилось с прошлого обмена, и наше тоже не то, что было.
+        var чужоеМенялось = !sameNote(base[k], r);
+        var своёМенялось = !sameNote(base[k], l);
+        if(чужоеМенялось && своёМенялось){
+          // Оба текста отдаются наружу: числом «один спорный день» человеку
+          // решать нечего, ему надо увидеть, что именно расходится.
+          споры.push({ date: k, mine: l.text, theirs: r.text,
+                       mineAt: l.updatedAt, theirsAt: r.updatedAt });
+          return;
         }
+        if((r.updatedAt || '') > (l.updatedAt || '')) incoming++;
+        else outgoing++;
       });
-      return { incoming: incoming, outgoing: outgoing, conflicts: conflicts,
+      return { incoming: incoming, outgoing: outgoing,
+               conflicts: споры.length, conflictDays: споры,
                remoteChangedAt: чужаяПравка || null };
     });
   }
@@ -4927,6 +5010,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var m = mergeNotes(notes, remote);
       notes = m.notes;
       saveNotesQuietly();
+      // После сведения мы видели всё, что было в файле, — с этого состояния и
+      // считается «менялось ли чужое».
+      saveNotesBase(remote);
       renderCalendar();
       renderNote();
       logEvent('notes', 'pulled', { added: m.added, updated: m.updated, deleted: m.deleted });
