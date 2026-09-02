@@ -1613,7 +1613,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      идёт дата самого файла — она берётся из ответа сервера и меняется при
      каждой публикации сама. Номер отвечает «что это за версия», дата —
      «насколько она свежая», и вместе они не врут даже когда номер забыли. */
-  var APP_VERSION = '1.0';
+  var APP_VERSION = '1.1';
 
   var STORAGE_EVENTS = 'educal.events.v2';
   var STORAGE_META = 'educal.meta.v2';
@@ -1871,6 +1871,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      приложение открылось как ни в чём не бывало — и человек решит, что
      потерял их сам. */
   var notesReadNote = null;
+  // Сколько надгробий прежней версии отброшено при чтении. Хранилище с ними
+  // переписывается при запуске: фильтр на чтении убирает их из памяти, но в
+  // браузере они лежали бы до следующей правки заметки.
+  var notesTombstones = 0;
 
   function readNotesV2(){
     var out = {};
@@ -1882,7 +1886,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var всего = 0, взято = 0;
         Object.keys(parsed).forEach(function(k){
           всего++;
-          if(isNoteKey(k) && isNoteValue(parsed[k])){ out[k] = parsed[k]; взято++; }
+          if(!isNoteKey(k) || !isNoteValue(parsed[k])) return;
+          /* Пустой текст — надгробие из прежней версии приложения. Тогда
+             удаление хранилось именно так; теперь запись просто стирается, и
+             прежние надгробия надо убрать при первом же чтении. Иначе они
+             уедут в файл заметок как записи с пустым текстом — тот самый
+             мусор, от которого мы избавлялись.
+
+             Отбросить их безопасно: заметки в них нет, а от воскрешения
+             стёртого защищает слепок последнего обмена. Со счётчиком потерь
+             это не смешивается — надгробие не потеря. */
+          if(!parsed[k].text){ взято++; notesTombstones++; return; }
+          out[k] = parsed[k]; взято++;
         });
         // Отброшенные записи — не мелочь: каждая это пропавшая заметка.
         if(взято !== всего) notesReadNote = { code: 'some entries invalid',
@@ -5441,6 +5456,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       scheduleLogSync();
     }
     if(notesMigrated) logEvent('notes', 'migrated from v1', { notes: notesMigrated });
+    if(notesTombstones){
+      // Надгробия остались от прежней версии, где удаление хранилось пустой
+      // записью. Убираем их из браузера тоже, а не только из памяти.
+      saveNotesQuietly();
+      logEvent('notes', 'tombstones dropped', { notes: notesTombstones });
+    }
     collectDom();
     bindStaticEvents();
     // Drop data cached by the previous export format so it doesn't sit in the
