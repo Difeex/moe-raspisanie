@@ -1875,7 +1875,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
        цвет и подпись отсюда, и без записи они бы просто упали.
        Значка нет намеренно: пустое значение нечем изображать, а кружок с
        восклицательным знаком уже занят «Другим». */
-    none:    {label:'Вид не указан', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)', icon:''}
+    none:    {label:'Неопознано', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)', icon:''}
   };
   var MODE_META = {
     online: {label:'Онлайн', icon:ICONS.online, color:'var(--mode)', line:'var(--border-hover)', bg:'var(--mode-soft)'},
@@ -2765,10 +2765,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
   }
 
+  // Легенда служит календарю, а не полосе фильтров, и потому её состав с
+  // чипами не совпадает. Она объясняет цвета полосок в ячейках — включая
+  // серую, у занятий с незаполненным видом. Чипа для них нет и не будет:
+  // отбирать не по чему. Обратное направление верно и здесь — переключатель
+  // праздников тоже относится к календарю, хотя плашка о празднике есть и в
+  // списке: наугад тыкать в даты, выясняя, праздник это или нет, человек не
+  // станет.
+  // Правило присутствия общее с фильтрами: показывается только то, что
+  // действительно встретилось в загруженном файле.
+  var LEGEND_ORDER = WORK_ORDER.concat(['none']);
+
   function renderLegend(){
     el.legend.innerHTML = '';
     var buckets = new Set(events.map(function(e){ return e.workTypeBucket; }));
-    WORK_ORDER.filter(function(b){ return buckets.has(b); }).forEach(function(b){
+    LEGEND_ORDER.filter(function(b){ return buckets.has(b); }).forEach(function(b){
       var m = WORK_META[b];
       var item = document.createElement('div'); item.className = 'legend-item';
       var dot = document.createElement('span'); dot.className = 'legend-dot'; dot.style.background = m.color;
