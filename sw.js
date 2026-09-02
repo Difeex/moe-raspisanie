@@ -23,7 +23,7 @@
 var CACHE = 'raspisanie-v2';
 var AUTH = 'users.json';
 var ASSETS = ['./', './index.html', './manifest.webmanifest', './' + AUTH,
-              './icons/icon-192.png', './icons/icon-512.png'];
+              './icons/icon-32.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', function(e){
   // skipWaiting: новая версия вступает в силу сразу, без ожидания закрытия
