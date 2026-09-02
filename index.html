@@ -4856,6 +4856,57 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     });
   }
 
+  /* Что лежит в хранилище — до того, как что-либо менять.
+
+     Нужно затем, что «свести заметки» человек нажимает вслепую: он не знает,
+     есть ли там вообще что-то новее. А случай, ради которого это заведено,
+     обычный — два устройства открыты разом. Написал на телефоне, вернулся к
+     компьютеру, пишет там; компьютер о телефонных заметках не знает и покажет
+     их только после сведения.
+
+     Здесь ничего не меняется ни в приложении, ни в хранилище: только
+     пересчитывается, что приедет и что уедет. По этим числам интерфейс и
+     предлагает сперва загрузить чужое, а потом дописать своё.
+
+     Отдельно считаются дни, где расходится текст и чужая правка новее: это
+     единственный случай, когда сведение заменит написанное здесь. Человеку
+     стоит сказать об этом отдельно — «приедет 3 заметки» и «1 из ваших будет
+     заменена» ощущаются очень по-разному. */
+  function syncNotesStatus(){
+    if(!syncAvailable()) return Promise.reject(syncError('auth'));
+    return readFile(NOTES_FILE).then(function(file){
+      var remote = {};
+      if(file){
+        try{ remote = validNotes(JSON.parse(file.text)); }
+        catch(e){ throw syncError('unknown'); }
+      }
+      var incoming = 0, outgoing = 0, conflicts = 0, чужаяПравка = '';
+      var ключи = {}, k;
+      for(k in notes) if(Object.prototype.hasOwnProperty.call(notes, k)) ключи[k] = true;
+      for(k in remote) if(Object.prototype.hasOwnProperty.call(remote, k)) ключи[k] = true;
+
+      Object.keys(ключи).forEach(function(k){
+        var l = notes[k], r = remote[k];
+        if(r && r.updatedAt > чужаяПравка) чужаяПравка = r.updatedAt;
+        if(!r){ if(l && l.text) outgoing++; return; }
+        if(!l){ if(r.text) incoming++; return; }
+        var lt = l.updatedAt || '', rt = r.updatedAt || '';
+        if(rt > lt){
+          // Чужая правка новее. Считаем её приездом, а если она перепишет
+          // написанное здесь — ещё и заменой.
+          if(l.text !== r.text){
+            incoming++;
+            if(l.text) conflicts++;
+          }
+        } else if(lt > rt && l.text !== r.text){
+          outgoing++;
+        }
+      });
+      return { incoming: incoming, outgoing: outgoing, conflicts: conflicts,
+               remoteChangedAt: чужаяПравка || null };
+    });
+  }
+
   /* ---- путь вниз: только по явному действию человека ----
 
      Это та самая кнопка «свести заметки». Здесь, и только здесь, заметки из
