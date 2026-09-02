@@ -699,7 +699,7 @@
      горизонтали задаёт JS по колонке списка — фиксированный элемент не знает
      о сетке. Здесь только вид и появление. */
   .scroll-filters{
-    position:fixed;top:16px;z-index:30;
+    position:fixed;bottom:16px;z-index:30;
     display:none;flex-direction:row;align-items:flex-start;flex-wrap:wrap;
     padding:12px 16px;border-radius:var(--radius-lg);
     /* То же стекло, что у панели календаря, но размытие сильнее: панель лежит
@@ -709,11 +709,20 @@
     backdrop-filter:blur(30px) saturate(180%);
     -webkit-backdrop-filter:blur(30px) saturate(180%);
     border:1px solid var(--border);
-    box-shadow:0 10px 28px rgba(31,45,68,.14);
-    opacity:0;transform:translateY(-8px);
+    /* Тень вверх, а не вниз: свет в приложении падает сверху, и у панели,
+       стоящей у нижнего края, подсвечиваться должен верхний край. */
+    box-shadow:0 -10px 28px rgba(31,45,68,.14);
+    /* Выезжает снизу — направление появления совпадает с краем, у которого
+       панель живёт. Сверху она бы будто прилетала мимо своего места. */
+    opacity:0;transform:translateY(8px);
     transition:opacity .16s ease, transform .16s ease;
   }
   .scroll-filters.visible{display:flex;opacity:1;transform:none}
+  /* Пока панель видна, странице добавляется место под неё. Иначе в самом низу
+     подпись «© Difeex» уходит под панель целиком — замерено, перекрытие ровно
+     в её высоту. Отступ появляется вместе с панелью и растёт с конца страницы,
+     поэтому содержимое под курсором не дёргается. */
+  .app.panel-space{padding-bottom:96px}
   /* min-width:0 обязателен: без него длинный поисковый чип распирает панель
      шире колонки списка. */
   .scroll-filters .cf-list{flex:1;min-width:0}
@@ -1817,7 +1826,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   // Отступ плавающей панели от верха окна — тот же, что у прилипшего
   // календаря, чтобы обе колонки начинались на одной линии.
-  var SCROLL_PANEL_TOP = 16;
+  // Верхняя граница рабочей области: за ней элемент считается ушедшим вверх, и
+  // на неё же ставится панель списка, когда к ней прокручивают. Прежнее имя
+  // говорило о положении плавающей панели, но та переехала к нижнему краю — к
+  // этому числу она отношения больше не имеет.
+  var TOP_EDGE = 16;
+
 
   var DATE_ROW_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*,\s*(\S+)/;
   var TIME_ROW_RE = /^(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})$/;
@@ -3152,14 +3166,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // но стоило выбрать дату, как панель всплывала над шапкой.
     var wide = window.matchMedia('(min-width:861px)').matches;
     var bar = el.filterBar.getBoundingClientRect();
-    var barGone = bar.height > 0 && bar.bottom < SCROLL_PANEL_TOP;
+    var barGone = bar.height > 0 && bar.bottom < TOP_EDGE;
 
     var stage = '';
     if(barGone){
       stage = 'all';
     } else if(!wide){
       var cal = el.calendarCol.getBoundingClientRect();
-      if(cal.height > 0 && cal.bottom < SCROLL_PANEL_TOP) stage = 'date';
+      if(cal.height > 0 && cal.bottom < TOP_EDGE) stage = 'date';
     }
 
     var parts = partsForStage(stage);
@@ -3181,6 +3195,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       el.scrollFilters.style.width = w + 'px';
       // Класс ставится до замеров: у скрытой панели все размеры нулевые.
       el.scrollFilters.classList.add('visible');
+      el.app.classList.add('panel-space');
       // \u0001 — разделитель, который не встретится в названии фильтра, иначе
       // два разных набора могли бы дать одинаковый ключ.
       var key = w + '|' + parts.map(function(p){ return p.text; }).join('\u0001');
@@ -3193,6 +3208,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     shownStage = '';
     lastCollapseKey = '';
     el.scrollFilters.classList.remove('visible');
+    el.app.classList.remove('panel-space');
   }
 
   // ---------- list ----------
@@ -3644,7 +3660,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Только на узком экране: на десктопе список и так виден рядом.
   function revealListOnNarrow(){
     if(window.matchMedia('(min-width:861px)').matches) return;
-    var top = el.listPanel.getBoundingClientRect().top + window.pageYOffset - SCROLL_PANEL_TOP;
+    var top = el.listPanel.getBoundingClientRect().top + window.pageYOffset - TOP_EDGE;
     if(top <= window.pageYOffset) return;   // список уже виден выше — дёргать нечего
     var smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({ top: top, behavior: smooth ? 'smooth' : 'auto' });
