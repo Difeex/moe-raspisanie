@@ -117,9 +117,14 @@
     --exam:#dd8a2e;
     --exam-soft:rgba(221,138,46,0.16);
     --exam-line:rgba(221,138,46,0.48);
-    --other:#8a7bc7;
-    --other-soft:rgba(138,123,199,0.16);
-    --other-line:rgba(138,123,199,0.45);
+    /* Маджента, а не прежний фиолетовый #8a7bc7: тот сидел вплотную к цветам,
+       которые примерялись форматам, и «Другое» с «Онлайном» сливались в один
+       тон. Ниша между синим лекции и красным праздника при этом остаётся
+       свободной, так что смысл цвета не поменялся — только расстояние до
+       соседей. */
+    --other:#a3559b;
+    --other-soft:rgba(163,85,155,0.16);
+    --other-line:rgba(163,85,155,0.45);
     /* Amber note tone — clearly "couldn't determine", but not the red the
        error banner uses, so it doesn't read as a failure to fix. */
     --warn-text:#94762f;
@@ -140,13 +145,23 @@
     --reset-line:rgba(224,101,93,0.30);
     --reset-line-hover:rgba(224,101,93,0.48);
     --reset-soft:rgba(224,101,93,0.16);
+    /* Форматы больше не делят один тёмно-синий: очное занятие тёплое и земное,
+       онлайн — холодный. Так они разведены не только подписью и значком, но и
+       температурой, а --mode остаётся за значением «выбрано» — тёмная плитка
+       дня в календаре и выбранные потоки. */
+    --onsite:#a15c43;
+    --onsite-soft:rgba(161,92,67,0.16);
+    --onsite-line:rgba(161,92,67,0.45);
+    --online:#2a8f9d;
+    --online-soft:rgba(42,143,157,0.16);
+    --online-line:rgba(42,143,157,0.45);
     --mode:#243447;
     --mode-soft:rgba(36,52,71,0.12);
     /* Lightened work-type colors, legible on the dark selected day cell. */
     --lecture-on-dark:#7aa3e8;
     --seminar-on-dark:#5fc79a;
     --exam-on-dark:#f0b268;
-    --other-on-dark:#b3a6e0;
+    --other-on-dark:#d09ac8;
     --radius-xl:24px;
     --radius-lg:18px;
     --radius-md:14px;
@@ -1037,15 +1052,18 @@
       box-shadow:0 8px 18px rgba(31,41,55,0.15);
     }
   }
-  /* У чипов видов работ тень при наведении берётся от их собственного цвета,
-     а не от общей серой: под цветной рамкой серое пятно выглядело грязным.
-     Только у этой группы — «Очно», «Онлайн» и потоки несут тёмно-синий
-     --mode, и цветная тень от него неотличима от серой, менять там нечего.
+  /* Тень при наведении берётся от собственного цвета чипа, а не от общей
+     серой: под цветной рамкой серое пятно выглядело грязным. Правило покрывает
+     и виды работ, и форматы — с тех пор как «Очно» и «Онлайн» получили свои
+     цвета вместо общего тёмно-синего, серая тень стала грязнить и под ними.
+     Потоки сюда не входят: они по-прежнему несут --mode, и цветная тень от
+     него от серой неотличима.
      color-mix разбавляет цвет прозрачностью прямо в объявлении: сам
      --chip-color приходит из JS готовым значением, добавить к нему альфу
      иначе нельзя. */
   @media (hover:hover){
-    .chip-btn[data-group="workTypes"]:not(.active):hover{
+    .chip-btn[data-group="workTypes"]:not(.active):hover,
+    .chip-btn[data-group="modes"]:not(.active):hover{
       box-shadow:0 8px 18px color-mix(in srgb, var(--chip-color) 21%, transparent);
     }
   }
@@ -2109,8 +2127,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     none:    {label:'Неопознано', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)', icon:''}
   };
   var MODE_META = {
-    online: {label:'Онлайн', icon:ICONS.online, color:'var(--mode)', line:'var(--border-hover)', bg:'var(--mode-soft)'},
-    onsite: {label:'Очно', icon:ICONS.onsite, color:'var(--mode)', line:'var(--border-hover)', bg:'var(--mode-soft)'},
+    online: {label:'Онлайн', icon:ICONS.online, color:'var(--online)', line:'var(--online-line)', bg:'var(--online-soft)'},
+    onsite: {label:'Очно', icon:ICONS.onsite, color:'var(--onsite)', line:'var(--onsite-line)', bg:'var(--onsite-soft)'},
     /* Место проведения не заполнено — см. WORK_META.none, устроено так же. */
     none:   {label:'Формат не указан', icon:'', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)'}
   };
