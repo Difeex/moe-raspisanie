@@ -1377,6 +1377,36 @@
     color:#8a5514;font-size:13.5px;font-weight:600;line-height:1.4;
   }
   .load-notice.visible{display:flex}
+  /* Развалившийся формат дат даёт длинное перечисление, и плашка вырастала
+     выше экрана, отодвигая расписание вниз. Поэтому свёрнутая плашка держит
+     две строки, а всё остальное человек открывает сам.
+     Две — потому что первая строка почти всегда занята самой сутью («не
+     удалось прочитать 3 даты…»), а вторая показывает, что под ней есть
+     подробности. Одной строки для этого мало, трёх — уже много: плашка
+     начинает спорить с календарём за высоту экрана.
+     Обрезка идёт по строкам, а не по высоте всей плашки: ограничение высоты
+     резало вторую строку пополам, и половинки букв читались как дефект вёрстки,
+     а не как «здесь есть продолжение». Поэтому в свёрнутом виде перечисление
+     скрыто целиком, а само замечание обрезается по строкам с многоточием. */
+  .load-notice:not(.expanded) #loadNoticeText{
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .load-notice:not(.expanded) .load-notice-list{display:none}
+  /* Нажимаемой становится вся плашка, а не шеврон: попасть пальцем в значок
+     14px трудно, а промах по такой цели читается как «не работает». Курсор
+     появляется только когда есть что разворачивать. */
+  .load-notice.collapsible{cursor:pointer}
+  .notice-chevron{
+    display:none;flex:none;width:26px;height:26px;margin:-3.5px 0;padding:0;
+    place-items:center;background:none;border:none;color:inherit;opacity:.65;
+    transition:opacity .15s ease, transform .2s ease;
+  }
+  .load-notice.collapsible .notice-chevron{display:grid}
+  .load-notice.expanded .notice-chevron{transform:rotate(180deg)}
+  .notice-chevron svg{width:15px;height:15px;stroke:currentColor}
+  @media (hover:hover){
+    .load-notice.collapsible:hover .notice-chevron{opacity:1}
+  }
   .load-notice > svg{width:18px;height:18px;stroke:currentColor;flex:none;margin-top:1px}
   /* min-width:0 обязателен: без него длинная причина распирает баннер и вместе
      с ним всю страницу по горизонтали. */
@@ -1692,10 +1722,16 @@
          круг закреплён за плашкой ошибки, чтобы две плашки различались и без
          цвета. -->
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4.1 2.2 17.9a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0z"/><path d="M12 9.7v3.6"/><path d="M12 17h.01"/></svg>
-    <div class="load-notice-body">
+    <div class="load-notice-body" id="loadNoticeBody">
       <div id="loadNoticeText"></div>
       <ul class="load-notice-list" id="loadNoticeList"></ul>
     </div>
+    <!-- Шеврон — признак того, что текст показан не целиком; он не кнопка сам
+         по себе, разворачивает нажатие по всей плашке. aria-hidden потому и
+         стоит: для чтения с экрана роль кнопки несёт сама плашка. -->
+    <span class="notice-chevron" id="loadNoticeChevron" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </span>
     <button class="banner-close" id="loadNoticeClose" type="button" aria-label="Скрыть уведомление">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
@@ -2075,7 +2111,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // дня — там, где человек уже не видит календаря и сверить не может. День
   // недели считается из самой даты, поэтому чужой вариант не нужен даже
   // целым.
-  var DATE_ROW_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})\s*(?:,.*)?$/;
+  // Строка-разделитель узнаётся не по этим выражениям, а по форме строки (см.
+  // isSeparatorRow): в ней заполнена только колонка «Время». Выражения лишь
+  // достают дату из уже опознанного разделителя, поэтому им позволено не
+  // разбирать хвост: день недели, который вуз дописывает после запятой,
+  // отбрасывается целиком. Проверить его приложению нечем, а испорченное слово
+  // протекало бы в подпись выбранного дня — туда, где человек уже не видит
+  // календаря и сверить не может.
+  //
+  // Написаний три, потому что выгрузка приходит не из одного источника и
+  // формат ячейки в ней однажды может смениться: «02.09.26» и «02.09.2026»,
+  // те же числа через косые или дефисы, и запись годом вперёд — «2026-09-02».
+  var DATE_DMY_RE = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4}|\d{2})(?:\D.*)?$/;
+  var DATE_YMD_RE = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\D.*)?$/;
   var TIME_ROW_RE = /^(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})$/;
 
   // Регулярное выражение проверяет только форму записи, но не смысл: под неё
@@ -2083,12 +2131,69 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // переносит переполнение — 13-й месяц становится январём следующего года.
   // Поэтому дату собираем и тут же сверяем обратно с исходными числами:
   // не совпало — значит даты не существует, и мы возвращаем null.
-  function parseSeparatorDate(m){
-    var day = +m[1], month = +m[2], year = +m[3];
+  // Дата собирается и тут же сверяется по частям: так отсеиваются записи
+  // правильной формы, но невозможные — 31.02, 29.02 в невисокосный год, 32-е
+  // число, нулевой месяц. Каждая из них дала бы «переехавшую» дату, и занятие
+  // молча оказалось бы в чужом дне.
+  function buildDate(year, month, day){
     if(year < 100) year += 2000;
     var d = new Date(Date.UTC(year, month - 1, day));
     if(d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null;
     return d;
+  }
+
+  // Excel хранит дату числом дней от 30 декабря 1899 года. Такая ячейка
+  // приходит сюда числом, а не строкой: выгрузка сделана человеком, и он мог
+  // задать колонке формат даты. Диапазон ограничен нарочно — без него любое
+  // число в первой колонке стало бы «датой» где-нибудь в 1902 году.
+  var EXCEL_EPOCH = Date.UTC(1899, 11, 30);
+  var EXCEL_MIN = 36526;  // 01.01.2000
+  var EXCEL_MAX = 73415;  // 01.01.2101
+  function dateFromExcelSerial(n){
+    if(!(n >= EXCEL_MIN && n <= EXCEL_MAX)) return null;
+    return new Date(EXCEL_EPOCH + Math.floor(n) * 86400000);
+  }
+
+  // Единственная точка чтения даты из ячейки разделителя: строкой в трёх
+  // написаниях или числом Excel. Не разобралось — null, и день сбрасывается.
+  function parseDateCell(value){
+    if(typeof value === 'number' && isFinite(value)) return dateFromExcelSerial(value);
+    if(value instanceof Date && !isNaN(value)){
+      return buildDate(value.getFullYear(), value.getMonth() + 1, value.getDate());
+    }
+    var text = strOrEmpty(value);
+    if(!text) return null;
+    var m = text.match(DATE_YMD_RE);
+    if(m) return buildDate(+m[1], +m[2], +m[3]);
+    m = text.match(DATE_DMY_RE);
+    if(m) return buildDate(+m[3], +m[2], +m[1]);
+    // Число, записанное в ячейку строкой, — тот же серийный номер Excel.
+    if(/^\d+([.,]\d+)?$/.test(text)) return dateFromExcelSerial(parseFloat(text.replace(',', '.')));
+    return null;
+  }
+
+  // Разделитель узнаётся по форме строки, а не по тому, похоже ли её начало на
+  // дату. Причина найдена на проверке: строка «03.09.26 чт» (пробел вместо
+  // запятой) под старое выражение не подходила, шла в разбор как занятие,
+  // спотыкалась о время — и текущий день при этом не сбрасывался, отчего
+  // занятия следующего дня молча доставались предыдущему. Теперь любая строка,
+  // где заполнена только колонка «Время», считается разделителем: не удалось
+  // прочитать из неё дату — день сбрасывается, и занятия под ней честно
+  // теряются с уведомлением.
+  //
+  // Оговорка про время: строка «11:50 - 13:20» с пустыми остальными колонками
+  // разделителем не считается. Это занятие, у которого не заполнено ничего
+  // кроме времени; приложение такие показывает, и отнимать их у человека
+  // из-за формального признака нельзя.
+  function isSeparatorRow(row, idx){
+    var first = row[idx.time];
+    if(first === null || first === undefined || strOrEmpty(first) === '') return false;
+    if(TIME_ROW_RE.test(strOrEmpty(first))) return false;
+    var others = ['discipline','stream','venue','workType'];
+    for(var i=0;i<others.length;i++){
+      if(idx[others[i]] !== undefined && strOrEmpty(row[idx[others[i]]]) !== '') return false;
+    }
+    return true;
   }
 
   var ICONS = {
@@ -2294,7 +2399,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var el = {};
   function collectDom(){
     ['app','uploadBtn','fileInput','fileInputInline','dropzone','noDataCard','uploadError','uploadErrorText','clearDataBtn',
-     'loadNotice','loadNoticeText','loadNoticeList','loadNoticeClose','uploadErrorClose',
+     'loadNotice','loadNoticeText','loadNoticeList','loadNoticeBody','loadNoticeClose','loadNoticeChevron','uploadErrorClose',
      'confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
      'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
@@ -2581,30 +2686,31 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // remembering the date currently in effect.
       var parsed = [], skipped = [], curDate = null;
       // Номер строки для человека — как в Excel, считая с единицы вместе с шапкой.
-      var note = function(i, reason){ skipped.push({ row: i + 1, reason: reason }); };
+      // kind — код причины: он не показывается, а идёт в журнал счётчиком и
+      // делит потери на виды в тексте уведомления.
+      var note = function(i, reason, kind){
+        skipped.push({ row: i + 1, reason: reason, kind: kind });
+      };
       for(var i=1;i<rows.length;i++){
         var row = rows[i];
         if(!row) continue;
         var first = strOrEmpty(row[idx.time]);
-        var dm = first.match(DATE_ROW_RE);
-        if(dm){
-          curDate = parseSeparatorDate(dm);
+        if(isSeparatorRow(row, idx)){
+          curDate = parseDateCell(row[idx.time]);
           // Дата-разделитель не разобралась — занятия под ней НЕ достаются
           // предыдущей дате: лучше честно потерять их с уведомлением, чем
           // тихо показать в чужом дне.
-          if(!curDate) note(i, 'не распознана дата «'+first+'»');
+          if(!curDate) note(i, first, 'badDate');
           continue;
         }
         if(!curDate){
           // Строка занятия до первой (или после испорченной) даты-разделителя.
-          if(strOrEmpty(row[idx.time]) || strOrEmpty(row[idx.discipline])){
-            note(i, 'занятие без даты — строка-разделитель выше отсутствует или не разобрана');
-          }
+          if(first || strOrEmpty(row[idx.discipline])) note(i, '', 'orphan');
           continue;
         }
         var ev = buildEvent(row, idx, curDate);
         if(ev) parsed.push(ev);
-        else if(strOrEmpty(row[idx.discipline]) || first) note(i, 'не распознано время «'+first+'»');
+        else if(strOrEmpty(row[idx.discipline]) || first) note(i, first, 'badTime');
       }
       if(!parsed.length) throw new Error('В файле не найдено ни одного занятия. Повторите загрузку с другим файлом расписания.');
       var newMeta = { fileName:file.name, uploadedAt:new Date().toISOString(), count:parsed.length,
@@ -2658,8 +2764,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     saveToStorage(events, meta);
     // Счётчики, а не содержимое: сами пропущенные строки несут названия
     // дисциплин, и в журнале им делать нечего.
+    // Причины потерь идут отдельными счётчиками: по одному общему «skipped» не
+    // отличить развалившийся формат дат от единичной строки с кривым временем,
+    // а это разные разговоры с человеком.
+    var потери = { badDate: 0, orphan: 0, badTime: 0 };
+    (newMeta.skipped || []).forEach(function(s){
+      if(потери[s.kind] === undefined) потери.badTime++; else потери[s.kind]++;
+    });
     logEvent('upload', 'parsed', { lessons: newMeta.count,
       skipped: (newMeta.skipped || []).length,
+      badDates: потери.badDate, orphanRows: потери.orphan, badTimes: потери.badTime,
       outliers: (newMeta.outliers || []).length,
       // Занятия, которые нельзя отобрать ни одним фильтром своей группы:
       // соответствующая ячейка выгрузки пуста. Счётчик, а не список — в
@@ -3815,7 +3929,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   // Перечислять все пропуски бессмысленно: если формат разъехался целиком,
   // список вырастет на весь файл и перекроет собой расписание.
-  var SKIP_LIST_LIMIT = 5;
+  // Предел был поставлен, когда плашка росла во всю высоту: при развалившемся
+  // формате перечисление закрывало собой расписание. Теперь плашка свёрнута до
+  // двух строк и разворачивается по нажатию, поэтому список может быть длиннее
+  // — человек сам решает, смотреть ли его. Совсем без предела оставлять нельзя:
+  // файл с сотней нечитаемых дат дал бы сотню строк, которые всё равно никто не
+  // прочтёт, а разворачивать их придётся долгой прокруткой.
+  var SKIP_LIST_LIMIT = 20;
   // Согласование по числу: 1 строку, 2–4 строки, 5+ строк.
   function plural(n, one, few, many){
     var last = n % 10, tens = n % 100;
@@ -3853,7 +3973,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // шапку плашки; когда их несколько, шапка становится общей, а сами
     // замечания идут строками ниже — перечислять их в одной фразе получилось
     // бы длинно, а подробности всё равно под ними.
-    var kinds = (skipped.length ? 1 : 0) + (outliers.length ? 1 : 0) + (noAttrs ? 1 : 0);
+    // Потери делятся по причинам: нечитаемая дата, занятие без даты над ним и
+    // нераспознанное время — это три разных беды, и складывать их в одно число
+    // «строк» бессмысленно. Человеку важно другое: пропал ли целый день или
+    // отдельное занятие.
+    var badDates = [], orphans = [], badTimes = [];
+    skipped.forEach(function(s){
+      if(s.kind === 'badDate') badDates.push(s);
+      else if(s.kind === 'orphan') orphans.push(s);
+      else badTimes.push(s);
+    });
+    // Занятия без даты почти всегда стоят под нечитаемой датой, поэтому
+    // отдельным замечанием они идут только когда своей даты в файле не было
+    // вовсе — иначе это одна и та же беда, названная дважды.
+    var kinds = ((badDates.length || orphans.length) ? 1 : 0) + (badTimes.length ? 1 : 0) +
+                (outliers.length ? 1 : 0) + (noAttrs ? 1 : 0);
     el.loadNoticeText.textContent = kinds > 1 ? 'Расписание загружено, но к нему есть замечания.' : '';
 
     function remark(text, details){
@@ -3869,13 +4003,38 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(details && details.length) appendNoticeList(details);
     }
 
-    if(skipped.length){
-      var n = skipped.length;
-      remark('разобрать не удалось ' + n + ' ' + plural(n, 'строку', 'строки', 'строк') + ' — ' +
-             plural(n, 'это занятие в календарь не попало.',
-                       'эти занятия в календарь не попали.',
-                       'эти занятия в календарь не попали.'),
-             skipped.map(function(s){ return 'Строка ' + s.row + ': ' + s.reason; }));
+    // Ячейка даты показывается человеку как есть: он пойдёт искать её в файле
+    // глазами, и пересказ «неверный формат» ему в этом не поможет.
+    function датаСтрокой(s){
+      return 'Строка ' + s.row + ': ' + (s.reason ? '«' + s.reason + '»' : 'ячейка даты пуста');
+    }
+
+    if(badDates.length){
+      var d = badDates.length, o = orphans.length;
+      remark('не удалось прочитать ' + d + ' ' + plural(d, 'дату', 'даты', 'дат') +
+             (o ? ' — ' + (o === 1
+                    ? 'занятие этого дня в календарь не попало.'
+                    : 'занятия этих дней (' + o + ') в календарь не попали.')
+                : ' — ' + plural(d, 'этот день', 'эти дни', 'эти дни') + ' в календарь не ' +
+                  plural(d, 'попал.', 'попали.', 'попали.')),
+             badDates.map(датаСтрокой));
+    } else if(orphans.length){
+      var oo = orphans.length;
+      remark(oo + ' ' + plural(oo, 'занятие стоит', 'занятия стоят', 'занятий стоят') +
+             ' выше первой даты в файле — ' +
+             plural(oo, 'оно в календарь не попало.', 'они в календарь не попали.',
+                        'они в календарь не попали.'));
+    }
+
+    if(badTimes.length){
+      var t = badTimes.length;
+      remark('не удалось прочитать время в ' + t + ' ' + plural(t, 'строке', 'строках', 'строках') +
+             ' — ' + plural(t, 'это занятие в календарь не попало.',
+                               'эти занятия в календарь не попали.',
+                               'эти занятия в календарь не попали.'),
+             badTimes.map(function(s){
+               return 'Строка ' + s.row + (s.reason ? ': «' + s.reason + '»' : '');
+             }));
     }
 
     if(outliers.length){
@@ -3898,11 +4057,50 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
 
     el.loadNotice.classList.add('visible');
+    updateNoticeCollapse();
+  }
+
+  /* Плашка сворачивается только когда ей есть что прятать. Проверка идёт по
+     самому содержимому: свёрнутая высота задана в em, а сколько строк займёт
+     текст — зависит от ширины экрана, и одно и то же уведомление на телефоне
+     переполняет плашку, а на десктопе умещается целиком. Поэтому сравниваются
+     настоящие высоты, а не длина текста.
+     Класс снимается перед замером: у развёрнутой плашки высоты равны, и без
+     сброса она навсегда осталась бы развёрнутой. */
+  function updateNoticeCollapse(){
+    el.loadNotice.classList.remove('expanded');
+    // Разворачивать есть что в двух случаях: под замечанием скрыто перечисление
+    // или само замечание не уместилось в две строки. Второе зависит от ширины
+    // экрана — на телефоне обрезается то, что на десктопе видно целиком.
+    var есть = el.loadNoticeList.childElementCount > 0 ||
+               el.loadNoticeText.scrollHeight - el.loadNoticeText.clientHeight > 1;
+    el.loadNotice.classList.toggle('collapsible', есть);
+    // Роль и место в обходе по Tab появляются вместе с возможностью развернуть:
+    // плашка без спрятанного текста — обычный текст, и объявлять её кнопкой,
+    // которая ничего не делает, было бы обманом.
+    if(есть){
+      el.loadNotice.setAttribute('role', 'button');
+      el.loadNotice.setAttribute('tabindex', '0');
+      el.loadNotice.setAttribute('aria-expanded', 'false');
+    } else {
+      el.loadNotice.removeAttribute('role');
+      el.loadNotice.removeAttribute('tabindex');
+      el.loadNotice.removeAttribute('aria-expanded');
+    }
+  }
+  function toggleLoadNotice(){
+    if(!el.loadNotice.classList.contains('collapsible')) return;
+    var открыто = el.loadNotice.classList.toggle('expanded');
+    el.loadNotice.setAttribute('aria-expanded', открыто ? 'true' : 'false');
+    // Пишется только действие человека: показ плашки уже виден по строке
+    // «upload · parsed» со счётчиками потерь, а «развернул» отвечает на
+    // отдельный вопрос — прочитал ли он перечисление целиком.
+    logEvent('upload', открыто ? 'notice opened' : 'notice closed', null);
   }
   function hideLoadNotice(){
     el.loadNoticeList.innerHTML = '';
     el.loadNoticeText.textContent = '';
-    el.loadNotice.classList.remove('visible');
+    el.loadNotice.classList.remove('visible', 'expanded', 'collapsible');
   }
 
   // ---------- confirm dialog ----------
@@ -3983,7 +4181,21 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(ev.target.files[0]) handleFile(ev.target.files[0]);
       ev.target.value = '';
     });
-    el.loadNoticeClose.addEventListener('click', hideLoadNotice);
+    // Крестик прячет плашку и не должен по дороге разворачивать её, поэтому
+    // останавливает всплытие — обработчик разворота висит на самой плашке.
+    el.loadNoticeClose.addEventListener('click', function(e){
+      e.stopPropagation();
+      hideLoadNotice();
+    });
+    el.loadNotice.addEventListener('click', toggleLoadNotice);
+    // С клавиатуры плашка открывается пробелом и вводом: она объявлена кнопкой
+    // только когда есть что разворачивать, и тогда же попадает в обход по Tab.
+    el.loadNotice.addEventListener('keydown', function(e){
+      if(e.key !== 'Enter' && e.key !== ' ') return;
+      if(!el.loadNotice.classList.contains('collapsible')) return;
+      e.preventDefault();
+      toggleLoadNotice();
+    });
     el.uploadErrorClose.addEventListener('click', hideUploadError);
 
     // ---- заметка к дню ----
