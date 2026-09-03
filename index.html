@@ -614,18 +614,23 @@
     display:none;flex:none;align-items:center;gap:8px;margin:0 -21px;
   }
   .panel-divider.visible{display:flex}
-  /* Черта — не рамка самого блока, а два его псевдоэлемента: длинный слева и
-     короткий справа. Так счётчик стоит в разрыве линии, а не поверх неё —
-     подложка под текстом не нужна, а она здесь и невозможна: фон панели
-     полупрозрачный, и подобрать под него плотность на глаз нельзя.
+  /* Линии черты — настоящие элементы, а не псевдоэлементы: врезок в ней теперь
+     две (день слева, счётчик справа), и между ними нужна тянущаяся линия, а по
+     краям — короткие хвосты. Псевдоэлементов на это не хватает: их всего два.
+     Пометки стоят в разрыве линии, а не поверх неё — подложка под текстом
+     здесь невозможна, фон панели полупрозрачный, и плотность под него на глаз
+     не подбирается.
      Тень внешняя, а не inset: при нулевой высоте внутрь класть её некуда. */
-  .panel-divider::before,
-  .panel-divider::after{
-    content:"";height:0;border-top:1px solid var(--border-soft);
+  .divider-line,
+  .divider-tail{
+    height:0;border-top:1px solid var(--border-soft);
     box-shadow:0 1px 0 var(--border);
   }
-  .panel-divider::before{flex:1}
-  .panel-divider::after{width:14px;flex:none}
+  .divider-line{flex:1}
+  .divider-tail{width:14px;flex:none}
+  /* Левый хвост нужен только вместе с врезкой дня: без неё линия начинается от
+     самого края панели, как раньше. */
+  .panel-divider:not(.has-date) .divider-tail:first-child{display:none}
   /* Кегль меньше всего остального в панели: счётчик — служебная пометка, а не
      содержание. line-height:1 обязателен — иначе строка распирает промежуток
      между управлением и списком. */
@@ -644,9 +649,34 @@
      с полями 6px, которые вместе с 14px промежутка панели дают привычные 20px
      воздуха с обеих сторон. Со счётчиком поля не нужны — высоту задаёт сам
      текст, и 14px промежутка хватает. */
-  .panel-divider:not(.has-count){margin:6px -21px}
-  .panel-divider:not(.has-count)::after{display:none}
+  /* Без счётчика и без дня у черты нет содержимого: остаётся нулевая высота и
+     поля по 6px, как было до всех врезок. */
+  .panel-divider:not(.has-count):not(.has-date){margin:6px -21px}
+  .panel-divider:not(.has-count) .divider-tail:last-child{display:none}
   .panel-divider:not(.has-count) .divider-count{display:none}
+
+  /* Врезка выбранного дня. Это тот же чип, что стоял отдельной строкой, — с
+     теми же обязанностями: нажатие снимает отбор по дате. Изменился только
+     вид: вместо тёмной плашки во всю ширину — пометка в разрыве линии, рядом
+     со счётчиком, который отвечает на соседний вопрос.
+     Подложка и скругление те же, что у счётчика: это две пометки одного рода.
+     Подпись набрана основным тоном, а не приглушённым, — день важнее числа. */
+  .divider-date{
+    display:inline-flex;align-items:center;gap:7px;flex:none;
+    font-size:12.5px;font-weight:700;line-height:1;letter-spacing:.02em;
+    color:var(--text);background:rgba(31,41,55,0.05);
+    border:none;border-radius:7px;padding:4px 8px;
+    font-family:inherit;cursor:pointer;white-space:nowrap;
+    transition:background .12s ease, color .12s ease;
+  }
+  /* Крестик — признак того, что пометка нажимается, а не отдельная кнопка:
+     цель для пальца остаётся во всю врезку. */
+  .divider-date-x{display:inline-flex;align-items:center;color:var(--text-faint);transition:color .12s ease}
+  .divider-date-x svg{width:11px;height:11px}
+  @media (hover:hover){
+    .divider-date:hover{background:rgba(31,41,55,0.09)}
+    .divider-date:hover .divider-date-x{color:var(--mode)}
+  }
   .cf-list{display:flex;flex-wrap:wrap;gap:6px}
   /* Read-only chips: deliberately one neutral style, without the fills the
      real filter chips use, so nothing here invites a tap.
@@ -1106,7 +1136,6 @@
   /* Rendered as a selected chip (.chip-btn.active in the markup) so it is
      identical to a picked stream tag; only the fill and alignment differ.
      Clicking it clears the date, exactly like the other selected chips. */
-  .date-chip{background:var(--mode);align-self:flex-start}
 
   /* ---------- Заметка к дню ----------
      Лежит над чертой, сразу под чипом даты: заметку пишут про выбранный день, и
@@ -1479,6 +1508,21 @@
        казался оторванным от форматов. */
     .filter-bar{gap:6px}
 
+    /* Фильтры-переключатели лежат на подложке, поиск и «Сбросить» — снаружи.
+       Ряды при равном шаге сливались в один ком чипов; подложка группирует их
+       фоном, не добавляя ни линий, ни подписей.
+       Плашек получается две, и делит их сама разметка: виды работ и форматы
+       живут в одном ряду (внутри он разбит на две строки правилом
+       .filter-group), потоки — в своём. Выходит «чем и как» отдельно от
+       «кому» — без единого нового узла в разметке.
+       Плотность фона взята у подложки счётчика в черте над списком: заметна
+       на просвет и не спорит с чипами. */
+    .filter-bar > .filter-row:not(.filter-row-search){
+      background:rgba(31,41,55,0.04);
+      border-radius:12px;
+      padding:8px 10px;
+    }
+
     /* Чипы фильтров ужимаются до размера чипов пересказа в плавающей панели:
        кегль 12.5px, поля 5x9 вместо 8x14, высота 26.5px вместо 34. На узком экране
        полоса фильтров занимала непозволительно много — четыре вида работ,
@@ -1677,13 +1721,32 @@
           </button>
         </div>
       </div>
-      <button class="chip-btn active date-chip" id="dateChip" style="display:none" title="Снять фильтр по дате">
-        <span id="dateChipLabel"></span>
-      </button>
-      <!-- Заметка к дню стоит сразу под чипом даты — над чертой, а не под ней.
-           Черта отделяет управление списком от самого списка, а заметка ни к
-           тому, ни к другому не относится: она про выбранный день и потому
-           держится вплотную к его названию.
+      <!-- Черта отделяет то, чем список управляется (фильтры), от самого
+           списка и всего, что к нему относится: заметки к дню, плашки
+           праздника, карточек, заглушек.
+           В неё же врезаны две пометки — слева выбранный день, справа счётчик
+           показанных занятий. Обе про то, что ниже: какой день и сколько в нём
+           занятий прошло через фильтры. Линия между ними тянется, хвосты по
+           краям в 14px не дают пометкам приклеиться к обрезу панели. -->
+      <div class="panel-divider" id="listDivider">
+        <span class="divider-tail"></span>
+        <!-- Тот же чип выбранного дня: нажатие снимает отбор по дате, поменялся
+             только его вид. Крестик — не отдельная кнопка, а признак того, что
+             пометка нажимается: цель для пальца остаётся во всю врезку. -->
+        <button class="divider-date" id="dateChip" style="display:none" title="Снять фильтр по дате">
+          <span id="dateChipLabel"></span>
+          <span class="divider-date-x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+        </button>
+        <span class="divider-line"></span>
+        <span class="divider-count" id="listCount"></span>
+        <span class="divider-tail"></span>
+      </div>
+      <!-- Заметка к дню — под чертой, вместе с тем, что она называет.
+           Прежде она стояла над чертой, в зоне управления списком, хотя списком
+           не управляет: место досталось ей по остаточному принципу. Теперь
+           черта с датой читается как заголовок для всего, что ниже: сначала
+           заметка к этому дню, потом его занятия.
            Показывается только при выбранной дате: заметка привязана к дню, и
            без выбранного дня писать её некуда. При этом от загруженного файла
            она не зависит — календарь кликабелен и до загрузки, а «в этот день
@@ -1706,10 +1769,6 @@
           <button class="note-btn note-btn-primary" id="noteDone" type="button">Готово</button>
         </div>
       </div>
-      <!-- Черта отделяет то, чем список управляется (фильтры, чип даты), от
-           самого списка и всего, что к нему относится, — плашки праздника,
-           карточек, заглушек. -->
-      <div class="panel-divider" id="listDivider"><span class="divider-count" id="listCount"></span></div>
       <div class="holiday-banner" id="holidayBanner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
         <span id="holidayBannerText"></span>
@@ -3572,9 +3631,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // остаётся ничего — тогда она читалась бы как украшение под верхним краем
   // панели, а не как граница.
   function updateListDivider(){
-    var hasControls = el.filterBar.style.display !== 'none' ||
-                      el.dateChip.style.display !== 'none';
+    var hasDate = el.dateChip.style.display !== 'none';
+    var hasControls = el.filterBar.style.display !== 'none' || hasDate;
     el.listDivider.classList.toggle('visible', hasControls);
+    // От этого класса зависит левый хвост линии: без врезки дня он не нужен,
+    // линия начинается от самого края панели.
+    el.listDivider.classList.toggle('has-date', hasDate);
 
     // Счётчик отвечает на вопрос «сколько сейчас показано». Без данных
     // отвечать нечего, и черта остаётся сплошной.
