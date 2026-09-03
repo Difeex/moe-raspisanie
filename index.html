@@ -1396,16 +1396,23 @@
      14px трудно, а промах по такой цели читается как «не работает». Курсор
      появляется только когда есть что разворачивать. */
   .load-notice.collapsible{cursor:pointer}
-  /* Прозрачность постоянная: шеврон на наведение не отзывается. Он не кнопка,
-     а признак — нажимается вся плашка, и мигающий значок обещал бы, что цель
-     именно он. Из переходов остался поворот при развороте. */
+  /* Отзывается на наведение один шеврон, и ровно так же, как крестик рядом:
+     под ним появляется подложка того же тона, а сам он темнеет. Текст при
+     этом не меняется — иначе плашка отзывалась бы дважды на одно движение
+     мыши. Разница с крестиком одна: у крестика отклик срабатывает от
+     наведения на него самого, а у шеврона — от наведения на всю плашку,
+     потому что нажимается вся плашка, а не значок. */
   .notice-chevron{
     display:none;flex:none;width:26px;height:26px;margin:-3.5px 0;padding:0;
-    place-items:center;background:none;border:none;color:inherit;opacity:.65;
-    transition:transform .2s ease;
+    place-items:center;background:none;border:none;border-radius:8px;
+    color:inherit;opacity:.65;
+    transition:opacity .15s ease, background .15s ease, transform .2s ease;
   }
   .load-notice.collapsible .notice-chevron{display:grid}
   .load-notice.expanded .notice-chevron{transform:rotate(180deg)}
+  @media (hover:hover){
+    .load-notice.collapsible:hover .notice-chevron{opacity:1;background:var(--close-hover)}
+  }
   /* В полтора раза крупнее крестика: 15px читались как точка. Крестик оставлен
      как есть — он на своём месте и одинаков во всех плашках, а шеврон должен
      заметно приглашать нажать. В кнопку 26px значок 22.5px входит с полем
