@@ -1406,6 +1406,11 @@
     display:none;flex:none;width:26px;height:26px;margin:-3.5px 0;padding:0;
     place-items:center;background:none;border:none;border-radius:8px;
     color:inherit;opacity:.65;
+    /* Промежуток до крестика 6px вместо общего для плашки: два значка рядом
+       читаются как одна пара, а не как два отдельных элемента ряда. Общий
+       gap плашки 10px трогать нельзя — он же отделяет текст от значка
+       предупреждения слева. Отсюда отрицательное поле: 10 − 4 = 6. */
+    margin-right:-4px;
     transition:opacity .15s ease, background .15s ease, transform .2s ease;
   }
   .load-notice.collapsible .notice-chevron{display:grid}
