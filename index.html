@@ -1403,7 +1403,12 @@
   }
   .load-notice.collapsible .notice-chevron{display:grid}
   .load-notice.expanded .notice-chevron{transform:rotate(180deg)}
-  .notice-chevron svg{width:15px;height:15px;stroke:currentColor}
+  /* В полтора раза крупнее крестика: 15px читались как точка. Крестик оставлен
+     как есть — он на своём месте и одинаков во всех плашках, а шеврон должен
+     заметно приглашать нажать. В кнопку 26px значок 22.5px входит с полем
+     меньше двух пикселей, поэтому саму кнопку не растим: она выровнена по
+     первой строке текста вместе с крестиком. */
+  .notice-chevron svg{width:22.5px;height:22.5px;stroke:currentColor}
   @media (hover:hover){
     .load-notice.collapsible:hover .notice-chevron{opacity:1}
   }
