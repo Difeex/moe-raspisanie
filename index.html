@@ -1396,10 +1396,13 @@
      14px трудно, а промах по такой цели читается как «не работает». Курсор
      появляется только когда есть что разворачивать. */
   .load-notice.collapsible{cursor:pointer}
+  /* Прозрачность постоянная: шеврон на наведение не отзывается. Он не кнопка,
+     а признак — нажимается вся плашка, и мигающий значок обещал бы, что цель
+     именно он. Из переходов остался поворот при развороте. */
   .notice-chevron{
     display:none;flex:none;width:26px;height:26px;margin:-3.5px 0;padding:0;
     place-items:center;background:none;border:none;color:inherit;opacity:.65;
-    transition:opacity .15s ease, transform .2s ease;
+    transition:transform .2s ease;
   }
   .load-notice.collapsible .notice-chevron{display:grid}
   .load-notice.expanded .notice-chevron{transform:rotate(180deg)}
@@ -1409,9 +1412,7 @@
      меньше двух пикселей, поэтому саму кнопку не растим: она выровнена по
      первой строке текста вместе с крестиком. */
   .notice-chevron svg{width:22.5px;height:22.5px;stroke:currentColor}
-  @media (hover:hover){
-    .load-notice.collapsible:hover .notice-chevron{opacity:1}
-  }
+
   .load-notice > svg{width:18px;height:18px;stroke:currentColor;flex:none;margin-top:1px}
   /* min-width:0 обязателен: без него длинная причина распирает баннер и вместе
      с ним всю страницу по горизонтали. */
@@ -1735,7 +1736,9 @@
          по себе, разворачивает нажатие по всей плашке. aria-hidden потому и
          стоит: для чтения с экрана роль кнопки несёт сама плашка. -->
     <span class="notice-chevron" id="loadNoticeChevron" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      <!-- Штрих тоньше остальных значков (1.4 против 2): те рисуются в 15px, а
+           этот в 22.5px, и при одинаковой толщине он выглядел жирным. -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
     </span>
     <button class="banner-close" id="loadNoticeClose" type="button" aria-label="Скрыть уведомление">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
