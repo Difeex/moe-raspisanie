@@ -3597,6 +3597,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.holidayBannerText.textContent = holidayLabel;
     el.holidayBanner.classList.toggle('visible', !!holidayLabel);
 
+    // День недели всюду считается из самой даты, а не берётся из поля day,
+    // куда разбор кладёт текст строки-разделителя выгрузки. Тот текст пишет
+    // вуз, и он бывает каким угодно: «ср» в обычной выгрузке, «понедельник» в
+    // другой. Чип подписывает ячейку, выбранную в календаре, и от оформления
+    // чужого файла зависеть не должен; заодно исчезает расхождение, при
+    // котором один и тот же день назывался по-разному в зависимости от того,
+    // остались ли в нём занятия после фильтров.
+    //
     // Чип даты рисуется до проверки на наличие данных: календарь кликабелен и
     // без загруженного файла, а какой день выбран — по правой панели иначе не
     // понять. Особенно после перелистывания месяца, когда выбранная ячейка
@@ -3620,19 +3628,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.eventList.style.display = filtered.length ? 'flex' : 'none';
     el.emptyState.style.display = filtered.length ? 'none' : 'flex';
 
-    // С данными день недели берём из самой выгрузки: в ней он написан так, как
-    // его пишет вуз, и подпись чипа не должна расходиться с заголовками групп.
-    if(filters.date && filtered.length){
-      el.dateChipLabel.textContent = formatDayHeading(dateFromKey(filters.date), filtered[0].day);
-    }
-
     if(!filtered.length) return;
 
     var groups = [], currentKey = null, currentGroup = null;
     filtered.forEach(function(e){
       if(e.dateKey !== currentKey){
         currentKey = e.dateKey;
-        currentGroup = { dateKey:e.dateKey, date:e.date, day:e.day, items:[] };
+        currentGroup = { dateKey:e.dateKey, date:e.date, items:[] };
         groups.push(currentGroup);
       }
       currentGroup.items.push(e);
@@ -3642,7 +3644,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var groupEl = document.createElement('div'); groupEl.className = 'day-group';
       if(!filters.date){
         var heading = document.createElement('div'); heading.className = 'day-group-heading';
-        heading.textContent = formatDayHeading(g.date, g.day);
+        heading.textContent = formatDayHeading(g.date, weekdayShort(g.date));
         groupEl.appendChild(heading);
       }
       var cardsWrap = document.createElement('div'); cardsWrap.className = 'cards';
