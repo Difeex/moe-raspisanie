@@ -2068,7 +2068,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var TOP_EDGE = 16;
 
 
-  var DATE_ROW_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})\s*,\s*(\S+)/;
+  // Строка-разделитель: из неё берётся только дата, в двух написаниях года —
+  // «07.09.26» и «07.09.2026». Всё, что стоит после запятой, отбрасывается
+  // вместе с самой запятой: вуз пишет там день недели, но проверить его
+  // приложению нечем, а испорченное слово протекало бы в подписи выбранного
+  // дня — там, где человек уже не видит календаря и сверить не может. День
+  // недели считается из самой даты, поэтому чужой вариант не нужен даже
+  // целым.
+  var DATE_ROW_RE = /^(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})\s*(?:,.*)?$/;
   var TIME_ROW_RE = /^(\d{1,2}:\d{2})\s*[-–—]\s*(\d{1,2}:\d{2})$/;
 
   // Регулярное выражение проверяет только форму записи, но не смысл: под неё
@@ -2451,7 +2458,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return idx;
   }
 
-  function buildEvent(row, idx, dateObj, day){
+  function buildEvent(row, idx, dateObj){
     var time = strOrEmpty(row[idx.time]).match(TIME_ROW_RE);
     if(!time) return null;
     var venue = splitVenue(row[idx.venue]);
@@ -2462,7 +2469,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return {
       dateKey: formatDateKeyUTC(dateObj),
       date: dateObj,
-      day: day || weekdayShort(dateObj),
+      day: weekdayShort(dateObj),
       start: time[1],
       end: time[2],
       discipline: strOrEmpty(row[idx.discipline]) || 'Без названия',
@@ -2572,7 +2579,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // The export puts each date on its own separator row and lists that
       // day's lessons underneath, so the sheet is walked top to bottom while
       // remembering the date currently in effect.
-      var parsed = [], skipped = [], curDate = null, curDay = '';
+      var parsed = [], skipped = [], curDate = null;
       // Номер строки для человека — как в Excel, считая с единицы вместе с шапкой.
       var note = function(i, reason){ skipped.push({ row: i + 1, reason: reason }); };
       for(var i=1;i<rows.length;i++){
@@ -2581,7 +2588,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         var first = strOrEmpty(row[idx.time]);
         var dm = first.match(DATE_ROW_RE);
         if(dm){
-          curDay = dm[4].charAt(0).toUpperCase() + dm[4].slice(1);
           curDate = parseSeparatorDate(dm);
           // Дата-разделитель не разобралась — занятия под ней НЕ достаются
           // предыдущей дате: лучше честно потерять их с уведомлением, чем
@@ -2596,7 +2602,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
           }
           continue;
         }
-        var ev = buildEvent(row, idx, curDate, curDay);
+        var ev = buildEvent(row, idx, curDate);
         if(ev) parsed.push(ev);
         else if(strOrEmpty(row[idx.discipline]) || first) note(i, 'не распознано время «'+first+'»');
       }
@@ -2692,6 +2698,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return arr.map(function(e){
       var p = e.dateKey.split('-').map(Number);
       e.date = new Date(Date.UTC(p[0], p[1]-1, p[2]));
+      // День недели пересчитывается, а не берётся из записи: копии, снятые
+      // прежними сборками, несут в этом поле слово из выгрузки. Ключ даты в
+      // них верный, значит и день восстановится верным.
+      e.day = weekdayShort(e.date);
       return e;
     });
   }
