@@ -18,7 +18,17 @@
    обратный, сначала сеть: по общей стратегии добавленный пользователь не смог
    бы войти до следующего запуска, потому что первый запрос отдал бы старую
    копию файла. Кэш здесь остаётся запасным вариантом и нужен ровно затем,
-   чтобы вход работал без сети. */
+   чтобы вход работал без сети.
+
+   Фоновый запрос идёт мимо браузерного кэша (cache: 'no-cache'). Pages отдаёт
+   страницу с max-age=600, и без этого браузер десять минут отвечал бы из
+   своего кэша, не спрашивая сервер, — свежая сборка задерживалась бы ещё на
+   один запуск сверх обычного. Трафика это почти не добавляет: запрос идёт
+   условным, и если файл не менялся, сервер отвечает «не менялось» без тела.
+
+   Обнаружив, что страница изменилась, service worker сообщает об этом
+   приложению. Само оно перезагружаться не станет — человек может в этот
+   момент писать заметку, — но покажет окно с просьбой перезапустить. */
 
 var CACHE = 'raspisanie-v2';
 var AUTH = 'users.json';
@@ -48,7 +58,7 @@ self.addEventListener('fetch', function(e){
 
   e.respondWith(caches.open(CACHE).then(function(cache){
     if(new URL(req.url).pathname.split('/').pop() === AUTH){
-      return fetch(req).then(function(res){
+      return fetch(req, { cache: 'no-cache' }).then(function(res){
         if(res && res.status === 200 && res.type === 'basic') cache.put(req, res.clone());
         return res;
       }).catch(function(){
@@ -61,13 +71,46 @@ self.addEventListener('fetch', function(e){
     }
 
     return cache.match(req).then(function(cached){
-      var network = fetch(req).then(function(res){
+      var network = fetch(req, { cache: 'no-cache' }).then(function(res){
         // В кэш кладём только удачные ответы. Иначе туда однажды попадёт
         // страница ошибки и приложение перестанет открываться совсем.
-        if(res && res.status === 200 && res.type === 'basic') cache.put(req, res.clone());
+        if(res && res.status === 200 && res.type === 'basic'){
+          if(изменилась(req, cached, res)) сообщитьОСборке();
+          cache.put(req, res.clone());
+        }
         return res;
       }).catch(function(){ return cached; });
       return cached || network;
     });
   }));
 });
+
+/* Изменилась ли сама страница приложения.
+
+   Сравниваются метки версии файла, которые отдаёт сервер: etag, а если его
+   нет — дата последнего изменения. Содержимое сличать незачем, оно в полтора
+   мегабайта, да и читать тело ответа здесь нельзя: оно уйдёт в кэш и
+   человеку.
+
+   Если в кэше ещё пусто, это первая установка, а не обновление: сообщать
+   человеку не о чем. */
+function изменилась(req, cached, res){
+  if(!cached) return false;
+  var путь = new URL(req.url).pathname.split('/').pop();
+  // Следим только за самой страницей: манифест и иконки человека не касаются.
+  if(путь && путь !== 'index.html') return false;
+  var было = cached.headers.get('etag') || cached.headers.get('last-modified');
+  var стало = res.headers.get('etag') || res.headers.get('last-modified');
+  return !!(было && стало && было !== стало);
+}
+
+/* Сказать открытым окнам приложения, что скачана новая сборка.
+
+   Дальше решает приложение: оно покажет человеку окно с просьбой перезапустить
+   и запишет это в журнал. Перезагружать страницу отсюда нельзя — в ней может
+   быть недописанная заметка. */
+function сообщитьОСборке(){
+  self.clients.matchAll({ includeUncontrolled: true }).then(function(окна){
+    окна.forEach(function(окно){ окно.postMessage({ type: 'build-updated' }); });
+  }).catch(function(){});
+}

@@ -6425,6 +6425,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     collectDom();
     bindStaticEvents();
+    listenForNewBuild();
     // Drop data cached by the previous export format so it doesn't sit in the
     // browser forever after the parser switched to v2.
     try{ localStorage.removeItem('educal.events.v1'); localStorage.removeItem('educal.meta.v1'); }catch(e){}
@@ -6473,6 +6474,42 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // Журнал уезжает последним и молча: он нужен, только когда что-то уже
     // случилось, и задерживать ради него запуск незачем.
     syncLog();
+  }
+
+  /* ---------- новая сборка приложения ----------
+
+     Service worker, скачав обновлённую страницу, присылает сюда сообщение.
+     Сама страница при этом остаётся прежней — та, что уже открыта, — и новая
+     достанется человеку при следующем запуске.
+
+     Перезагружать её отсюда нельзя: в поле заметки может быть недописанный
+     текст, а «Сохраняется само» обещает сохранность через минуту тишины, а не
+     через секунду. Поэтому приложение только говорит человеку, что пора
+     перезапуститься, и ждёт, пока он это сделает сам.
+
+     Окно с просьбой рисует приложенческая линия — по договору в
+     docs/синхронизация-для-интерфейса.md. Здесь остаётся то, что под капотом:
+     приём сообщения, защита от повторов и запись в журнал. */
+  var сборкаОбъявлена = false;
+
+  function announceNewBuild(){
+    // Сообщение приходит на каждый фоновый запрос, который принёс свежий файл,
+    // — а их за сессию бывает несколько. Человеку это говорится один раз.
+    if(сборкаОбъявлена) return;
+    сборкаОбъявлена = true;
+    logEvent('app', 'new build available');
+    // Уезжает сразу: по этой записи видно, что человек увидел просьбу
+    // перезапуститься, и дальше по журналу — послушался ли он.
+    scheduleLogSync();
+    // Здесь приложенческая линия показывает модальное окно. Пока его нет,
+    // событие живёт только в журнале.
+  }
+
+  function listenForNewBuild(){
+    if(!('serviceWorker' in navigator) || !navigator.serviceWorker) return;
+    navigator.serviceWorker.addEventListener('message', function(e){
+      if(e && e.data && e.data.type === 'build-updated') announceNewBuild();
+    });
   }
 
   // Обычно скрипт лежит в конце body и DOMContentLoaded ещё впереди. Но
