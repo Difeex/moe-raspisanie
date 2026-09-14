@@ -2971,23 +2971,34 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     try{ el.noteInput.setSelectionRange(len, len); }catch(e){}
   }
 
+  /* Чем кончилась правка — одной записью в журнал.
+
+     Вынесено отдельно, потому что кончиться она может тремя путями, и раньше
+     журнал знал только про один. «Готово», Escape и потеря фокуса приходят
+     сюда через finishNoteEdit; смена дня в календаре завершает правку своей
+     веткой в renderNote; а уход со страницы не завершал её вовсе — и стёртая
+     заметка исчезала молча, потому что текст сохраняется по таймеру ещё до
+     выхода из правки.
+
+     Слепая зона здесь дороже лишней записи: человек спрашивает, куда делась
+     заметка, а в журнале пусто — и выходит, что она пропала сама. */
+  function logNoteFinish(ключ, было){
+    var стало = !!noteText(ключ);
+    // Открыл, посмотрел, вышел — не событие. Создание и удаление сами по себе
+    // изменения, а «правка» без единой тронутой буквы — шум.
+    if(!было && стало) logEvent('note', 'created', ключ);
+    else if(было && стало && noteEditedText) logEvent('note', 'edited', ключ);
+    else if(было && !стало) logEvent('note', 'deleted', ключ + ' via=text');
+  }
+
   function finishNoteEdit(){
     if(!noteEditingKey) return;
     var ключ = noteEditingKey;
     var было = noteEditingHad;
     var flipped = commitNote();
-    var стало = !!noteText(ключ);
     // Дата — да, текст — никогда. Без даты «стёртая заметка воскресла»
     // неотличимо от «заметка не сохранилась».
-    /* Открыл, посмотрел, вышел — не событие. Создание и удаление сами по себе
-       изменения, а вот «правка» без единой тронутой буквы — шум.
-
-       Пустой текст — это удаление, а не какая-то опустевшая заметка: запись
-       стирается тем же delete, что и по кнопке. Поэтому и код тот же, а
-       различает пути пометка способа. */
-    if(!было && стало) logEvent('note', 'created', ключ);
-    else if(было && стало && noteEditedText) logEvent('note', 'edited', ключ);
-    else if(было && !стало) logEvent('note', 'deleted', ключ + ' via=text');
+    logNoteFinish(ключ, было);
     noteEditingKey = null;
     if(flipped) renderCalendar();
     renderNote();
@@ -3020,7 +3031,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // бросаем её. Перерисовка календаря нужна тому дню, который правили, и
     // renderCalendar выше по вызову о нём уже не знает.
     if(noteEditingKey && noteEditingKey !== filters.date){
+      // Ключ и «было» снимаются до записи: commitNote меняет заметку, а
+      // noteEditingKey через строку обнулится.
+      var правленный = noteEditingKey, былаЗаметка = noteEditingHad;
       var flipped = commitNote();
+      logNoteFinish(правленный, былаЗаметка);
       noteEditingKey = null;
       if(flipped) renderCalendar();
     }
@@ -4453,7 +4468,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
        Написанное при этом не теряется в любом случае — оно в браузере, — но
        на второе устройство попало бы только к следующему запуску. */
     document.addEventListener('visibilitychange', function(){
-      if(document.visibilityState === 'hidden') flushNotesOnHide();
+      if(document.visibilityState !== 'hidden') return;
+      /* Правка, брошенная открытой, здесь и заканчивается. Без этого стёртая
+         заметка исчезала беззвучно: текст сохраняется по таймеру ещё до выхода
+         из правки, и если человек закрывает приложение не выходя, событие не
+         записывалось вовсе.
+
+         Порядок важен — сперва завершить правку, потом отправлять: иначе
+         наверх уедет состояние без последней правки. */
+      finishNoteEdit();
+      flushNotesOnHide();
     });
     document.addEventListener('keydown', function(e){
       if(e.key !== 'Escape') return;
