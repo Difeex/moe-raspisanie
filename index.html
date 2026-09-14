@@ -6030,7 +6030,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function flushNotes(){
     if(notesSyncTimer){ clearTimeout(notesSyncTimer); notesSyncTimer = null; }
-    syncPushNotes().catch(function(err){
+    syncPushNotes().then(function(){
+      /* Заодно уезжает журнал. До этого он ждал следующего запуска, и всё, что
+         человек делал с заметками за вечер, доезжало только назавтра — а
+         спрашивают о случившемся обычно в тот же день.
+
+         Лишних записей это не создаёт: syncLog не трогает сеть вовсе, если с
+         прошлой отправки не прибавилось ни строчки. А когда прибавилось, вторую
+         запись подряд транспорт сам отодвинет на секунду — GitHub просит
+         разносить записи в один репозиторий. */
+      syncLog();
+    }, function(err){
       logEvent('notes', 'push failed', err.kind);
       scheduleLogSync();
     });
