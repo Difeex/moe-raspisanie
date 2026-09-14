@@ -3009,6 +3009,20 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     else if(было && !стало) logEvent('note', 'deleted', ключ + ' via=text');
   }
 
+  /* Поле правки очищается, когда правка закончилась.
+
+     Заметка к этому времени уже записана, а текст в поле — просто остаток. Для
+     WebKit, однако, он означает несохранённые изменения формы: после долгого
+     простоя iPadOS выгружает приложение из памяти, при возврате пробует
+     восстановить страницу и спрашивает системным окном, отбросить ли их.
+     Человек видит чужой вопрос про изменения, которых давно нет.
+
+     Заодно уходит странность помельче: заметку удалили, а её текст всё ещё
+     лежал в скрытом поле до следующего открытия правки. */
+  function clearNoteInput(){
+    if(el && el.noteInput) el.noteInput.value = '';
+  }
+
   function finishNoteEdit(){
     if(!noteEditingKey) return;
     var ключ = noteEditingKey;
@@ -3018,6 +3032,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // неотличимо от «заметка не сохранилась».
     logNoteFinish(ключ, было);
     noteEditingKey = null;
+    clearNoteInput();
     if(flipped) renderCalendar();
     renderNote();
   }
@@ -3055,6 +3070,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var flipped = commitNote();
       logNoteFinish(правленный, былаЗаметка);
       noteEditingKey = null;
+      clearNoteInput();
       if(flipped) renderCalendar();
     }
 
