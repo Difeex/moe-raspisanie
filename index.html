@@ -62,6 +62,32 @@
   if(location.protocol.indexOf('http') === 0){
     document.documentElement.className += ' auth-pending';
   }
+  /* Страница скрыта до первого верного кадра.
+
+     На iPad при запуске с домашнего экрана приложение на мгновение
+     отрисовывалось шире экрана — правый край уходил за границу, — и только
+     потом вставало на место. Окно в этот момент ещё разворачивается, а файл в
+     полтора мегабайта успевает отрисоваться в промежуточном размере.
+
+     Показываем, когда ширина окна перестанет меняться. Класс ставится
+     скриптом, а не в стилях: если скрипт не выполнится, страница просто
+     покажется сразу, как раньше, — а не останется невидимой навсегда. */
+  document.documentElement.className += ' booting';
+  /* Сообщение о новой сборке ловится с первых миллисекунд.
+
+     Service worker присылает его, когда дочитает страницу из сети, и это
+     бывает раньше, чем приложение успеет подготовиться: страница отдаётся из
+     кэша мгновенно, а разбирается полтора мегабайта заметно дольше. Сообщение,
+     пришедшее до того, как повешен основной слушатель, пропало бы — и человек
+     узнал бы о новой версии только со следующего запуска.
+
+     Здесь запоминается сам факт; что с ним делать, решает приложение, когда
+     будет готово. */
+  if(navigator.serviceWorker){
+    navigator.serviceWorker.addEventListener('message', function(e){
+      if(e && e.data && e.data.type === 'build-updated') window.__buildUpdated = true;
+    });
+  }
 </script>
 <style>
   /* ===== Договорённость про наведение =====
@@ -1494,6 +1520,11 @@
      and has to be read, so hierarchy comes from size and weight instead. */
   .confirm-card p{margin:0;font-size:13.5px;color:var(--text);line-height:1.5}
   .confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+
+  /* Скрытие до первого верного кадра. Именно visibility, а не display:
+     раскладку считать нужно — иначе после показа она считалась бы заново и
+     кадр опять оказался бы промежуточным. */
+  .booting{visibility:hidden}
 
   /* ---------- Экран входа ---------- */
   .auth-pending .app{display:none}
@@ -6420,6 +6451,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
        ни устройства, ни состояния сети: ровно того, чем объясняется, почему
        он не может войти. */
     logEnvironment();
+    // Слушатель новой сборки вешается раньше прочего: сообщение от service
+    // worker приходит, когда он дочитает страницу из сети, и это бывает
+    // быстрее, чем приложение успеет разобрать расписание.
+    listenForNewBuild();
+    ждатьУстойчивойШирины();
     // Заметки читаются раньше, чем журнал готов принимать записи, поэтому их
     // итог откладывался до этой точки.
     if(notesReadNote){
@@ -6440,7 +6476,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     collectDom();
     bindStaticEvents();
-    listenForNewBuild();
     // Drop data cached by the previous export format so it doesn't sit in the
     // browser forever after the parser switched to v2.
     try{ localStorage.removeItem('educal.events.v1'); localStorage.removeItem('educal.meta.v1'); }catch(e){}
@@ -6489,6 +6524,43 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // Журнал уезжает последним и молча: он нужен, только когда что-то уже
     // случилось, и задерживать ради него запуск незачем.
     syncLog();
+  }
+
+  /* Показать страницу, когда её ширина устоялась.
+
+     Ждём два подряд кадра с одинаковой шириной окна: на запуске оно
+     разворачивается не мгновенно, и первый кадр приходится на промежуточный
+     размер. Двух хватает — перекос держался доли секунды.
+
+     Три предохранителя, и каждый нужен. Таймер: в скрытой вкладке кадры не
+     идут вовсе, и без него приложение осталось бы невидимым. Событие load:
+     если кадры почему-то не пойдут и при видимой вкладке. И сам класс
+     снимается только один раз — дальше показывать нечего.
+
+     Почему не display:none — раскладка при нём не считается, и после показа
+     первый кадр опять оказался бы промежуточным. */
+  var стартПоказан = false;
+
+  function показатьПриложение(){
+    if(стартПоказан) return;
+    стартПоказан = true;
+    document.documentElement.classList.remove('booting');
+  }
+
+  function ждатьУстойчивойШирины(){
+    var прежняя = -1, совпадений = 0;
+    function кадр(){
+      if(стартПоказан) return;
+      var w = window.innerWidth;
+      if(w === прежняя) совпадений++; else { совпадений = 0; прежняя = w; }
+      if(совпадений >= 2) return показатьПриложение();
+      requestAnimationFrame(кадр);
+    }
+    requestAnimationFrame(кадр);
+    // Полсекунды — потолок, а не ожидание: обычно показ происходит на третьем
+    // кадре, то есть примерно через 50 мс.
+    setTimeout(показатьПриложение, 500);
+    window.addEventListener('load', показатьПриложение);
   }
 
   /* ---------- новая сборка приложения ----------
@@ -6572,6 +6644,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     navigator.serviceWorker.addEventListener('message', function(e){
       if(e && e.data && e.data.type === 'build-updated') announceNewBuild();
     });
+    // Сообщение могло прийти, пока приложение готовилось: его поймал слушатель
+    // из шапки файла и оставил отметку.
+    if(window.__buildUpdated) announceNewBuild();
   }
 
   // Обычно скрипт лежит в конце body и DOMContentLoaded ещё впереди. Но
