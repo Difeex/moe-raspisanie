@@ -2979,11 +2979,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var стало = !!noteText(ключ);
     // Дата — да, текст — никогда. Без даты «стёртая заметка воскресла»
     // неотличимо от «заметка не сохранилась».
-    // Открыл, посмотрел, вышел — не событие. Создание и очистка сами по себе
-    // изменения, а вот «правка» без единой тронутой буквы — шум.
+    /* Открыл, посмотрел, вышел — не событие. Создание и удаление сами по себе
+       изменения, а вот «правка» без единой тронутой буквы — шум.
+
+       Пустой текст — это удаление, а не какая-то опустевшая заметка: запись
+       стирается тем же delete, что и по кнопке. Поэтому и код тот же, а
+       различает пути пометка способа. */
     if(!было && стало) logEvent('note', 'created', ключ);
     else if(было && стало && noteEditedText) logEvent('note', 'edited', ключ);
-    else if(было && !стало) logEvent('note', 'emptied', ключ);
+    else if(было && !стало) logEvent('note', 'deleted', ключ + ' via=text');
     noteEditingKey = null;
     if(flipped) renderCalendar();
     renderNote();
@@ -2999,7 +3003,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       delete notes[dateKey];
       saveNotes();
     }
-    if(had) logEvent('note', 'deleted', dateKey);
+    // Способ важен не сам по себе, а для разговора с человеком: «заметка
+    // пропала» звучит одинаково, а случиться может по-разному, и по журналу
+    // видно, нажал он крестик или стёр текст руками.
+    if(had) logEvent('note', 'deleted', dateKey + ' via=button');
     if(noteEditingKey === dateKey){
       if(noteSaveTimer){ clearTimeout(noteSaveTimer); noteSaveTimer = null; }
       noteEditingKey = null;
