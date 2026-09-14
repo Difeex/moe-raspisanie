@@ -2435,6 +2435,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Была ли заметка в этом дне до начала правки — для одной записи в журнал
   // на законченную правку.
   var noteEditingHad = false;
+  /* Менялся ли текст за эту правку. Иначе в журнал попадала правка, которой не
+     было: человек открывает заметку, смотрит на неё, касается экрана в стороне
+     — фокус потерян, правка «закончена», и пишется note · edited. На планшете
+     это ловится особенно легко, а журнал от такого шума перестаёт читаться.
+
+     Флаг живёт от начала правки до её конца, а не от одного сохранения до
+     другого: набранный текст сохраняется по таймеру ещё в процессе, и если
+     смотреть только на последнее сохранение, настоящая правка осталась бы
+     незаписанной. */
+  var noteEditedText = false;
   var noteSaveTimer = null;
 
   // ---------- dom ----------
@@ -2928,6 +2938,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(changed){
       if(text) notes[noteEditingKey] = { text: text, updatedAt: new Date().toISOString() };
       else delete notes[noteEditingKey];
+      noteEditedText = true;
       saveNotes();
     }
     return had !== !!text;
@@ -2951,6 +2962,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // событие на законченную правку, а не на каждое срабатывание
     // отложенного сохранения. Текст не запоминается, только его наличие.
     noteEditingHad = !!noteText(filters.date);
+    noteEditedText = false;
     el.noteInput.value = noteText(filters.date);
     renderNote();
     el.noteInput.focus();
@@ -2967,8 +2979,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var стало = !!noteText(ключ);
     // Дата — да, текст — никогда. Без даты «стёртая заметка воскресла»
     // неотличимо от «заметка не сохранилась».
+    // Открыл, посмотрел, вышел — не событие. Создание и очистка сами по себе
+    // изменения, а вот «правка» без единой тронутой буквы — шум.
     if(!было && стало) logEvent('note', 'created', ключ);
-    else if(было && стало) logEvent('note', 'edited', ключ);
+    else if(было && стало && noteEditedText) logEvent('note', 'edited', ключ);
     else if(было && !стало) logEvent('note', 'emptied', ключ);
     noteEditingKey = null;
     if(flipped) renderCalendar();
