@@ -1237,26 +1237,16 @@
       box-shadow:0 4px 12px color-mix(in srgb, var(--note-strong) 20%, transparent);
     }
   }
-  /* Крестик нужен именно здесь: «Очистить» заметки не трогает (они переживают
-     и очистку, и замену файла), поэтому стереть написанное больше нечем.
-     Появляется при наведении — в покое он отвлекал бы от самого текста. */
-  .note-del{
-    width:24px;height:24px;flex:none;display:flex;align-items:center;justify-content:center;
-    border:none;background:transparent;color:var(--text-faint);cursor:pointer;border-radius:8px;
-    opacity:0;transition:opacity .12s ease, color .12s ease, background .12s ease;
-  }
-  /* Проявление крестика по наведению и по фокусу разведено намеренно. Первое
-     за медиазапросом — на сенсорном экране наведения нет, и правило только
-     залипало бы после нажатия. Второе снаружи: клавиатура бывает и у
-     сенсорного устройства, и там крестик обязан показываться. */
-  @media (hover:hover){
-    .note-block:hover .note-del{opacity:1}
-  }
-  .note-del:focus-visible{opacity:1}
-  @media (hover:hover){
-    .note-del:hover{color:var(--holiday);background:rgba(207,130,136,0.12)}
-  }
-  .note-del svg{width:14px;height:14px;margin-top:0;color:currentColor;opacity:1}
+  /* Крестика в блоке заметки нет намеренно. Он был, проявлялся по наведению —
+     и оказался ловушкой на сенсорном экране: наведения там нет, крестик не
+     показывался никогда, но нажиматься не переставал. Квадрат 24×24 в правом
+     краю блока, ровно под пальцем у того, кто тянется открыть заметку, и
+     удаление без подтверждения. Проверено на живом приложении: касание в эту
+     точку стирало заметку молча.
+
+     Удалить заметку можно только изнутри правки, кнопкой «Удалить». Это на шаг
+     дольше, и так и задумано: удаление без подтверждения не должно стоить
+     одного промаха. */
   .note-edit{
     display:none;flex-direction:column;gap:8px;
     padding:11px 14px;border-radius:var(--radius-lg);
@@ -1869,9 +1859,6 @@
       <button class="note-block empty" id="noteBlock" type="button" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
         <span class="note-body" id="noteBody"></span>
-        <span class="note-del" id="noteDelete" role="button" tabindex="0" title="Удалить заметку" aria-label="Удалить заметку">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </span>
       </button>
       <div class="note-edit" id="noteEdit">
         <!-- 1000 знаков — с большим запасом на любую разумную заметку. Это 2 КБ
@@ -2458,7 +2445,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
      'dateChip','dateChipLabel','listDivider','listCount','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn',
-     'noteBlock','noteBody','noteDelete','noteEdit','noteInput','noteDeleteEdit','noteDone'
+     'noteBlock','noteBody','noteEdit','noteInput','noteDeleteEdit','noteDone'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
 
@@ -3058,7 +3045,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.noteBlock.classList.toggle('filled', !!text);
     el.noteBlock.classList.toggle('empty', !text);
     el.noteBody.textContent = text || 'Заметка к этому дню';
-    el.noteDelete.style.display = text ? 'flex' : 'none';
     el.noteBlock.title = text ? 'Изменить заметку' : 'Добавить заметку к этому дню';
   }
 
@@ -4280,22 +4266,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.uploadErrorClose.addEventListener('click', hideUploadError);
 
     // ---- заметка к дню ----
-    // Клик по блоку открывает правку. Крестик лежит внутри него, поэтому свой
-    // клик останавливает: иначе удаление тут же открывало бы пустую правку.
-    el.noteBlock.addEventListener('click', function(e){
-      if(el.noteDelete.contains(e.target)) return;
-      startNoteEdit();
-    });
-    el.noteDelete.addEventListener('click', function(e){
-      e.stopPropagation();
-      deleteNote(filters.date);
-    });
-    el.noteDelete.addEventListener('keydown', function(e){
-      if(e.key === 'Enter' || e.key === ' '){
-        e.preventDefault(); e.stopPropagation();
-        deleteNote(filters.date);
-      }
-    });
+    // Нажатие по блоку открывает правку, и внутри него больше нет ничего
+    // нажимаемого: удаление живёт только в самой правке.
+    el.noteBlock.addEventListener('click', startNoteEdit);
     el.noteInput.addEventListener('input', scheduleNoteSave);
     // Уход фокуса — тоже конец правки: заметку пишут между делом, и требовать
     // нажатия «Готово» значило бы терять её при первом же клике мимо.
