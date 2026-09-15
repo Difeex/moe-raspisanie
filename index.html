@@ -1312,36 +1312,28 @@
   .chip-btn[data-group="workTypes"] svg,
   .chip-btn[data-group="modes"] svg{display:none}
 
+  /* «Сбросить» одета так же, как её двойник в плавающей панели над списком:
+     коралловая рамка вполсилы, подпись того же тона, без значка. Две кнопки с
+     одним названием и одним действием должны выглядеть одинаково — иначе
+     человек гадает, разные ли это вещи.
+
+     Значка у кнопки нет и в разметке. Он был — перечёркнутый кружок, — и стоил
+     20px ширины, за которые борется поле поиска рядом. Сперва его прятали
+     стилями на узком экране, потом, когда полосу свели к одному виду, на всех
+     ширинах; теперь он убран совсем, вместе с тремя правилами, которые
+     описывали его размер, цвет и потемнение под курсором. Оставаясь в файле,
+     они описывали бы то, чего нет.
+
+     Заодно ушёл gap: детей у кнопки теперь один, разделять нечего. */
   .reset-btn{
-    display:flex;align-items:center;gap:7px;height:38px;padding:0 16px;flex:none;
-    border-radius:999px;border:1px solid var(--border-soft);background:var(--surface-strong);
-    color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+    display:flex;align-items:center;height:38px;padding:0 16px;flex:none;
+    border-radius:999px;border:1px solid var(--reset-line);background:var(--surface-strong);
+    color:color-mix(in srgb, var(--reset) 82%, #fff);
+    font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
     transition:color .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
-  @media (hover:hover){
-    .reset-btn:hover{color:var(--text);background:var(--surface-strong);border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
-  }
-  /* Same muted grey the chip icons use at rest. */
-  .reset-btn svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);flex:none;transition:color .12s ease}
-  /* При наведении иконка темнеет до того же тона, что у «Очно» и «Онлайн»
-     (--mode): у тех при hover срабатывает --chip-color, и на фоне соседей
-     сброс со светлым --text-muted выглядел недожатым. */
-  @media (hover:hover){
-    .reset-btn:hover svg{color:var(--mode)}
-  }
-
-  /* «Сбросить» одета так же, как её двойник в плавающей панели: коралловая
-     рамка вполсилы, подпись того же тона, без значка. Две кнопки с одним
-     названием и одним действием должны выглядеть одинаково — иначе человек
-     гадает, разные ли это вещи. Значок снят по той же причине, что и там: он
-     стоил 20px ширины, а поле поиска рядом за них борется.
-     Под курсором, как и в панели: рамка уплотняется, добавляется заливка
-     втрое светлее рамки, подпись доходит до полного цвета. */
-  .reset-btn{
-    border-color:var(--reset-line);
-    color:color-mix(in srgb, var(--reset) 82%, #fff);
-  }
-  .reset-btn svg{display:none}
+  /* Под курсором, как и в панели: рамка уплотняется, добавляется заливка втрое
+     светлее рамки, подпись доходит до полного цвета. */
   @media (hover:hover){
     .reset-btn:hover{
       color:var(--reset);
@@ -1815,7 +1807,7 @@
     #searchInput, .reset-btn{height:27px;font-size:12.5px}
     /* Значки уравнены с плюсом у «+ Поток» — 14px. Прежние 15 и 16 при общей
        высоте в 26.5px перевешивали его по пятну. */
-    .search-wrap svg, .reset-btn svg{width:14px;height:14px}
+    .search-wrap svg{width:14px;height:14px}
     /* Отступ слева под значок пересчитан от его новой ширины: 10 до значка,
        14 сам значок, 6 до текста. */
     .search-wrap svg{left:10px}
@@ -1823,7 +1815,7 @@
     /* Поля и зазор — как у «+ Поток», чтобы кнопка не выглядела шире чипа при
        той же высоте. Начертание у подписи прежнее, 600, как у чипов; у поиска
        остаётся обычное 400 — это вводимый текст, а не подпись. */
-    .reset-btn{padding:0 11px;gap:5px}
+    .reset-btn{padding:0 11px}
 
     /* «Сбросить» одета так же, как её двойник в плавающей панели: коралловая
        рамка вполсилы, подпись того же тона, без значка. Две кнопки с одним
@@ -2095,7 +2087,6 @@
             <input type="search" id="searchInput" maxlength="100" placeholder="Поиск по дисциплине…">
           </div>
           <button class="reset-btn" id="resetFilters" title="Сбросить все фильтры">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.8 9.2l-5.6 5.6M9.2 9.2l5.6 5.6"/></svg>
             <span>Сбросить</span>
           </button>
         </div>
