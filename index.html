@@ -1574,7 +1574,10 @@
     text-align:left;width:100%;font-family:inherit;
     cursor:text;transition:border-color .12s ease, background .12s ease, color .12s ease;
   }
-    .note-block svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);flex:none;margin-top:1px}
+    /* 15×15, а не 16: рисунок ужат на пиксель справа и снизу. Верхний левый угол
+     остаётся на месте — значок первый в строке и выровнен по её верху, поэтому
+     ужимается он именно с тех двух сторон, с которых и просили. */
+  .note-block svg{width:15px;height:15px;stroke:currentColor;color:var(--text-faint);flex:none;margin-top:1px}
   /* Подпись приподнята на пиксель относительно значка. Сдвиг именно
      оптический, через position, а не полем: поле убавило бы высоту всей
      плашки, потому что строка у неё самый высокий элемент — 18.85px против
