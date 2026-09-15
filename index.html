@@ -1692,7 +1692,12 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
     padding:26px 20px;text-align:center;color:var(--text-muted);border-radius:var(--radius-lg);
   }
-  #emptyStateText{font-size:14px;line-height:1.45;max-width:34ch}
+  /* Ширина по самой длинной из трёх строк — «В этот день нет занятий по
+     выбранным фильтрам», 45 знаков. При 34ch она ломалась так, что «фильтрам»
+     оставалось на строке одно.
+     text-wrap:balance — на случай, когда ширины всё же не хватает: на узком
+     экране строки делятся поровну, и последняя не остаётся с одним словом. */
+  #emptyStateText{font-size:14px;line-height:1.45;max-width:46ch;text-wrap:balance}
 
   /* ---------- No-data placeholder (inline, non-blocking) ----------
      Вертикальных полей нет намеренно: карточка прозрачная и центрируется в
