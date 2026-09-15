@@ -409,7 +409,11 @@
      flex-wrap — чтобы на узком экране строка переносилась, а не выдавливала шапку. */
   .brand small{
     display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;
-    font-size:12px;color:var(--text-muted);font-weight:500;
+    /* Высота строки числом: при normal она выходила 14.5px, а значки в ней
+       13px — и значок вставал на четверть пикселя ниже подписи. Ровные 14
+       оставляют половину, которая на экране с двойной плотностью ложится
+       точно. */
+    font-size:12px;line-height:14px;color:var(--text-muted);font-weight:500;
   }
   .status-part{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
   .status-icon{display:inline-flex;flex:none;color:var(--text-faint)}
@@ -978,7 +982,9 @@
      такой день как раз надо. */
   .divider-holiday{
     display:inline-flex;align-items:center;gap:7px;flex:none;
-    font-size:12.5px;font-weight:700;line-height:1;font-family:inherit;
+    /* Высота строки числом — см. пояснение у .divider-date. Здесь она совпадает
+       с высотой значка, и подпись встаёт с ним на одну линию. */
+    font-size:12.5px;font-weight:700;line-height:14px;font-family:inherit;
     color:var(--holiday-text);background:var(--holiday-soft);
     border:none;border-radius:9px;padding:6px 12px;
     cursor:pointer;white-space:nowrap;
@@ -1019,7 +1025,9 @@
        счётчик был мельче (11.5px при полях 4x8) и рядом с подросшим чипом
        читался обрывком. Обе врезки в одной черте и должны быть одного роста —
        иначе линия между ними не читается как одна линия. */
-    font-size:12.5px;font-weight:700;line-height:1;color:var(--text-muted);
+    /* Высота строки числом — по той же причине, что у чипа даты: ровные 26px
+       у всех врезок и никаких четвертей пикселя при выравнивании по центру. */
+    font-size:12.5px;font-weight:700;line-height:14px;color:var(--text-muted);
     white-space:nowrap;letter-spacing:.02em;
     background:rgba(31,41,55,0.05);border-radius:9px;padding:6px 12px;
     font-family:inherit;border:none;
@@ -1075,8 +1083,23 @@
        Считать надо вместе с пустотой внутри рисунка — её осталось чуть больше
        пикселя после обрезки viewBox, — поэтому от букв до видимого креста
        выходит около 8px. */
+    /* Высота строки задана числом (14px), а не множителем. Причина —
+       полупиксели. При line-height:1 строка выходила 12.5px, и вся врезка
+       получала высоту 24.5. Тег праздника при этом держал ровные 26: внутри
+       него значок 14px, он выше строки. Врезки стоят в одном ряду по центру, и
+       разница 1.5px делилась пополам — чипы садились на 0.75px ниже верха
+       ряда, а подпись «Праздник» оказывалась на 0.75px ниже подписи даты.
+
+       Четверть пикселя — единственная дробь, которую не нарисовать и на экране
+       с двойной плотностью: 0.75×2 = полтора физических пикселя. Половина
+       ложится ровно (0.5×2 = 1), а четверть размазывается, и браузеры
+       округляют её по-разному. На Маке это сходило с рук, на iPad врезки
+       читались косыми и несоосными — владелец показал снимок.
+
+       14px выбраны по значку тега: теперь строка, значок и все три врезки
+       ровно 26px высотой, а внутри ряда они стоят без сдвига. */
     display:inline-flex;align-items:center;gap:7px;flex:none;
-    font-size:12.5px;font-weight:700;line-height:1;
+    font-size:12.5px;font-weight:700;line-height:14px;
     color:var(--text);background:rgba(31,41,55,0.05);
     /* Поля и скругление — как у чипа дня в списке (6x12 и 9px), а не прежние
        4x8 и 7px. Это один и тот же чип в двух положениях: в списке он стоит
@@ -1448,6 +1471,12 @@
   .chip-btn{
     display:flex;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--border-soft);
     background:var(--surface-strong);padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;
+    /* Высота строки числом и вровень со значком: при line-height:normal строка
+       13px выходила 15.5, значок 16 — и подпись вставала на четверть пикселя
+       ниже. На экране с двойной плотностью четверть не рисуется, и подписи
+       чипов слегка плыли. Ровные 16 ставят строку и значок на одну линию,
+       высота чипа при этом прежняя, 34. */
+    line-height:16px;
     /* Keeps icon-less chips (picked streams) the same height as the ones
        whose 16px icon would otherwise make them a pixel taller. */
     min-height:34px;
@@ -1592,7 +1621,10 @@
     display:flex;align-items:center;height:38px;padding:0 16px;flex:none;
     border-radius:999px;border:1px solid var(--reset-line);background:var(--surface-strong);
     color:color-mix(in srgb, var(--reset) 82%, #fff);
-    font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+    /* Высота строки числом — по той же причине, что у чипов: 13px при normal
+       давали 15.5, и подпись в кнопке высотой 38 садилась на четверть
+       пикселя. */
+    font-size:13px;line-height:16px;font-weight:600;cursor:pointer;white-space:nowrap;
     transition:color .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
   /* Под курсором, как и в панели: рамка уплотняется, добавляется заливка втрое
@@ -1652,7 +1684,7 @@
        становилась выше на 0.73px (высота строки 19.575 против 18.85).
        Эталоном владелец назначил пустое приглашение — по нему и выровнены
        остальные. */
-    font-size:13px;line-height:1.45;color:var(--text);
+    font-size:13px;line-height:19px;color:var(--text);
     text-align:left;width:100%;font-family:inherit;
     cursor:text;transition:border-color .12s ease, background .12s ease, color .12s ease;
   }
@@ -1746,7 +1778,7 @@
     width:100%;border:none;outline:none;background:transparent;resize:none;
     /* Тот же кегль, что у написанной заметки: иначе текст менял размер в
        момент, когда правку открывают и закрывают. */
-    font-family:inherit;font-size:13px;line-height:1.45;color:var(--text);
+    font-family:inherit;font-size:13px;line-height:19px;color:var(--text);
     min-height:52px;padding:0;
   }
   .note-row{display:flex;align-items:center;gap:8px}
@@ -1796,7 +1828,11 @@
   .day-group-heading{
     display:inline-flex;align-items:center;width:max-content;
     font-family:inherit;border:none;text-align:left;
-    font-size:12.5px;font-weight:700;line-height:1;color:var(--text-muted);
+    /* Высота строки 14px — ровно как у врезок в черте. Это один и тот же чип
+       в двух местах, и расходиться по росту им нельзя: там он теперь 26px, и
+       здесь должен быть таким же. Заодно уходит половина пикселя: при
+       line-height:1 чип был 24.5. */
+    font-size:12.5px;font-weight:700;line-height:14px;color:var(--text-muted);
     background:rgba(31,41,55,0.05);border-radius:9px;padding:6px 12px;
     cursor:pointer;transition:background .12s ease, color .12s ease;
   }
@@ -1844,7 +1880,12 @@
   .event-time .t2{font-size:12.5px;color:var(--text-faint)}
   .event-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
   .event-title-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .event-title{font-size:14.5px;font-weight:700;line-height:1.3}
+  /* Высота строки числом, а не множителем: 14.5 × 1.3 давало 18.85px, и
+     название, выровненное по центру строки в 28px (её задают значки), садилось
+     на 19.578 — четверть пикселя. На экране с двойной плотностью это полтора
+     физических пикселя: не нарисовать, только размазать. 19px дают ровные
+     половины, а видимое расстояние между строками не меняется. */
+  .event-title{font-size:14.5px;font-weight:700;line-height:19px}
   .event-icons{display:flex;gap:6px;flex:none;margin-left:auto}
   .type-icon,.mode-icon{
     width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;
@@ -2226,7 +2267,10 @@
 
        Плюс у «+ Поток» оставлен: он не сообщает вид занятия, а показывает,
        что чип раскрывает меню, — единственный признак этого. */
-    .chip-btn{font-size:12.5px;padding:5px 9px;min-height:26.5px;gap:0}
+    /* Строка 14px и высота 26 — целые числа вместо прежних 14.5 и 26.5.
+       Полпикселя тут брались из line-height:normal и тянули за собой четверти
+       при выравнивании; на глаз чип стал ниже на полпикселя, не больше. */
+    .chip-btn{font-size:12.5px;padding:5px 9px;line-height:14px;min-height:26px;gap:0}
     .chip-btn.stream-add{gap:5px}
     .chip-btn.stream-add svg{width:14px;height:14px}
     /* Выпадающий список повторяет кегль чипа, который его раскрыл. Пока
@@ -2284,7 +2328,7 @@
      остаётся коралловой и без значка, ряды лежат на подложках, виды и форматы
      разведены по своим строкам. */
   @media (min-width:641px) and (max-width:841px){
-    .chip-btn{font-size:13px;padding:8px 14px;min-height:34px}
+    .chip-btn{font-size:13px;padding:8px 14px;line-height:16px;min-height:34px}
     .chip-btn.stream-add{gap:6px}
     .chip-btn.stream-add svg{width:16px;height:16px}
     #searchInput, .reset-btn{height:38px}
