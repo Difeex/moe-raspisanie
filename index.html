@@ -729,9 +729,13 @@
   .divider-count{
     /* Тон подписи, а не самый светлый: тем же --text-muted набраны «Сбросить»
        и заголовки дней в списке. На светлой подложке --text-faint выцветал. */
-    font-size:11.5px;font-weight:700;line-height:1;color:var(--text-muted);
+    /* Кегль, поля и скругление — как у чипа дня: 12.5px, 6x12, 9px. Прежде
+       счётчик был мельче (11.5px при полях 4x8) и рядом с подросшим чипом
+       читался обрывком. Обе врезки в одной черте и должны быть одного роста —
+       иначе линия между ними не читается как одна линия. */
+    font-size:12.5px;font-weight:700;line-height:1;color:var(--text-muted);
     white-space:nowrap;letter-spacing:.02em;
-    background:rgba(31,41,55,0.05);border-radius:7px;padding:4px 8px;
+    background:rgba(31,41,55,0.05);border-radius:9px;padding:6px 12px;
   }
   /* Без счётчика черта ведёт себя как прежде: сплошная линия нулевой высоты,
      с полями 6px, которые вместе с 14px промежутка панели дают привычные 20px
@@ -753,7 +757,11 @@
     display:inline-flex;align-items:center;gap:7px;flex:none;
     font-size:12.5px;font-weight:700;line-height:1;
     color:var(--text);background:rgba(31,41,55,0.05);
-    border:none;border-radius:7px;padding:4px 8px;
+    /* Поля и скругление — как у чипа дня в списке (6x12 и 9px), а не прежние
+       4x8 и 7px. Это один и тот же чип в двух положениях: в списке он стоит
+       сам по себе, здесь врезан в линию, — и разъезжаться по размеру им
+       нельзя, иначе при выборе дня чип на глаз «сжимается», переезжая в черту. */
+    border:none;border-radius:9px;padding:6px 12px;
     font-family:inherit;cursor:pointer;white-space:nowrap;
     transition:background .12s ease, color .12s ease;
   }
