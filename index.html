@@ -1574,11 +1574,12 @@
     text-align:left;width:100%;font-family:inherit;
     cursor:text;transition:border-color .12s ease, background .12s ease, color .12s ease;
   }
-    /* Поле сверху 2px, а не 1: значок карандаша нарисован так, что его грифель
-     уходит в левый нижний угол поля, и оптически рисунок сидит выше строки,
-     даже когда коробки выровнены. Лишний пиксель ставит его на линию подписи. */
-  .note-block svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);flex:none;margin-top:2px}
-  .note-body{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}
+    .note-block svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);flex:none;margin-top:1px}
+  /* Подпись приподнята на пиксель относительно значка. Сдвиг именно
+     оптический, через position, а не полем: поле убавило бы высоту всей
+     плашки, потому что строка у неё самый высокий элемент — 18.85px против
+     17 у значка с его полем. */
+  .note-body{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word;position:relative;top:-1px}
   /* Пустое приглашение — сплошной линией, как у всего остального в панели.
      Пунктир тут был от зоны перетаскивания файла, но родство оказалось ложным:
      туда файл бросают, а сюда пишут, нажав, — и пунктир среди сплошных рамок
