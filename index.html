@@ -1896,6 +1896,13 @@
     background:rgba(32,41,58,0.35);backdrop-filter:blur(4px);z-index:60;padding:20px;
   }
   .confirm-overlay.open{display:flex}
+  /* Окно новой версии лежит выше всех остальных окон. Само по себе это не
+     очевидно: у всех подложек один z-index, и порядок решала бы разметка, а в
+     ней окно сборки стоит первым — то есть рисовалось бы под окном праздника,
+     открытым в тот же момент. Экран входа и вовсе лежит на 70.
+     Окно сборки — единственное, которое обязано перекрывать всё: пока человек
+     не перезапустился, остальное ему делать нечего. */
+  #buildOverlay{z-index:90}
   .confirm-card{max-width:360px;width:100%;padding:26px 24px;border-radius:var(--radius-xl);display:flex;flex-direction:column;gap:10px}
   .confirm-card h3{margin:0;font-size:17px}
   /* Full text colour, not the muted one — this copy warns about losing data
@@ -7356,7 +7363,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   /* Ветки, которые выключаются под окном обновления. Форма входа сюда входит
      на случай, когда человек вышел из учётной записи, не закрыв окно. */
   function гаситьФонОкна(гасить){
-    ['.app', '#confirmOverlay', '#lockOverlay'].forEach(function(сел){
+    // Перечислены все ветки, до которых человек мог бы дотянуться: само
+    // приложение, диалог подтверждения, экран входа и окно праздника. Список
+    // ручной, и это его слабое место — новое окно легко забыть; если окон
+    // станет больше, стоит гасить всё, кроме самого окна сборки.
+    ['.app', '#confirmOverlay', '#lockOverlay', '#holidayOverlay'].forEach(function(сел){
       var узел = document.querySelector(сел);
       if(!узел) return;
       if(гасить) узел.setAttribute('inert', '');
