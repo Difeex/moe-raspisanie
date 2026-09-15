@@ -397,7 +397,7 @@
      откликается наравне со всеми — но лишь у той, у которой рамка есть:
      залитые btn-primary и btn-danger её не имеют. */
   @media (hover:hover){
-    .btn-ghost:hover{border-width:2px}
+    .btn-ghost:hover{outline:1px solid var(--border-soft)}
   }
   /* Вдвое шире обычной кнопки. Ширина берётся полями, а не min-width: подпись
      тут короткая («ОК»), и при заданной ширине она стояла бы в озере пустоты не
@@ -410,7 +410,7 @@
     transition:color .12s ease, border-color .12s ease, box-shadow .12s ease;
   }
   @media (hover:hover){
-    .icon-btn:hover{color:var(--text);border-color:var(--border-hover);border-width:2px;box-shadow:var(--shadow-sm)}
+    .icon-btn:hover{color:var(--text);border-color:var(--border-hover);outline:1px solid var(--border-hover);box-shadow:var(--shadow-sm)}
   }
   .icon-btn svg{width:18px;height:18px}
 
@@ -554,7 +554,7 @@
     .hdr-btn-clear:hover svg{color:inherit}
   }
   @media (hover:hover){
-    .today-btn:hover, .hdr-btn:hover{color:var(--text);border-color:var(--border-hover);border-width:2px;box-shadow:var(--shadow-sm)}
+    .today-btn:hover, .hdr-btn:hover{color:var(--text);border-color:var(--border-hover);outline:1px solid var(--border-hover);box-shadow:var(--shadow-sm)}
   }
   /* Кнопкам шапки тень крупнее общей: они заметно шире «Сегодня», и мелкое
      пятно под широким элементом выглядело обрубленным. Размах взят от чипов
@@ -583,7 +583,7 @@
      пятно читается как грязь. */
   @media (hover:hover){
     .hdr-btn-accent:hover{
-      border-color:var(--accent);border-width:2px;color:var(--accent);
+      border-color:var(--accent);outline:1px solid var(--accent);color:var(--accent);
       box-shadow:0 7px 17px color-mix(in srgb, var(--accent) 20%, transparent);
     }
   }
@@ -1083,7 +1083,7 @@
       color:var(--reset);
       background:var(--reset-soft);
       border-color:var(--reset-line-hover);
-      border-width:2px;
+      outline:1px solid var(--reset-line-hover);
     }
   }
   /* Сам чип 26.5px — для пальца мало. Невидимое расширение до 44px: соседние
@@ -1241,7 +1241,7 @@
   }
   .sf-top svg{width:14px;height:14px;stroke:currentColor}
   @media (hover:hover){
-    .sf-top:hover{color:var(--mode);border-color:var(--border-hover);border-width:2px;box-shadow:var(--shadow-sm)}
+    .sf-top:hover{color:var(--mode);border-color:var(--border-hover);outline:1px solid var(--border-hover);box-shadow:var(--shadow-sm)}
   }
   /* Сама кнопка 26.5px — для промаха мышью мало. Невидимое расширение до 44px;
      соседний разделитель и чипы нажатий не принимают, отбирать не у кого. */
@@ -1381,7 +1381,7 @@
   .chip-btn svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);transition:color .12s ease}
   @media (hover:hover){
     .chip-btn:not(.active):hover{
-      border-width:2px;
+      outline:1px solid var(--chip-line,var(--border-hover));
       /* Текст темнеет так же, как у «Сегодня» и «Сбросить»: невыбранный чип
          откликается на наведение всем сразу — рамкой, иконкой и подписью.
          Выбранные (.active) исключены — там подпись уже белая на заливке,
@@ -1470,12 +1470,22 @@
     background:var(--surface-strong);outline:none;font-size:13.5px;
   }
   #searchInput:focus{border-color:var(--accent)}
+  /* ===== Как утолщается линия под курсором =====
+     Не border-width, а outline поверх прежней рамки в 1px. Причина
+     геометрическая: box-sizing:border-box удерживает размер, только когда он
+     задан явно, а у чипов, меток и кнопок ширина растёт из содержимого — и
+     рамка в 2px раздвигала их на 2px, толкая соседей и разгоняя ряды и панели
+     под ними. Обводка в раскладке не участвует вовсе: она рисуется снаружи
+     коробки и ничего не двигает.
+     Цвет обводки в каждом правиле тот же, что у рамки в этом же состоянии, —
+     вместе они и читаются одной линией в два пикселя. */
+
   /* Отклик на наведение у поля поиска был единственным на всю полосу, которого
      не было вовсе: чипы рядом откликались, а поле молчало и читалось неживым.
      Меняется только толщина рамки — цвет остаётся прежним, чтобы поле не
      притворялось выбранным. */
   @media (hover:hover){
-    #searchInput:hover{border-width:2px}
+    #searchInput:hover{outline:1px solid var(--border-soft)}
   }
   /* Значки видов работ и форматов сняты. Они стоили по 19px на чип, и на узком
      экране упиралось всё именно в них; заодно без значков ряд чипов читается
@@ -1512,7 +1522,7 @@
       color:var(--reset);
       background:var(--reset-soft);
       border-color:var(--reset-line-hover);
-      border-width:2px;
+      outline:1px solid var(--reset-line-hover);
       box-shadow:none;
     }
   }
@@ -1535,7 +1545,7 @@
       color:var(--text);
       background:var(--surface-strong);
       border-color:var(--border-hover);
-      border-width:2px;
+      outline:1px solid var(--border-hover);
       box-shadow:var(--shadow-sm);
     }
   }
@@ -1584,7 +1594,7 @@
      Прежний --surface-soft (0.4 против 0.62) давал заметно более тусклое
      пятно, и на фоне соседних карточек отклик выглядел неуверенным. */
   @media (hover:hover){
-    .note-block.empty:hover{background:var(--surface);color:var(--text);border-width:2px}
+    .note-block.empty:hover{background:var(--surface);color:var(--text);outline:1px dashed var(--note-line)}
   }
   /* Написанная заметка берёт цвет уголка из календаря — тот же тон в обоих
      местах, иначе признак и содержание читались бы как разные вещи. */
@@ -1605,7 +1615,7 @@
   @media (hover:hover){
     .note-block.filled:hover{
       border-color:color-mix(in srgb, var(--note-strong) 62%, transparent);
-      border-width:2px;
+      outline:1px solid color-mix(in srgb, var(--note-strong) 62%, transparent);
       box-shadow:0 4px 12px color-mix(in srgb, var(--note-strong) 20%, transparent);
     }
   }
@@ -1640,11 +1650,11 @@
     transition:color .12s ease, border-color .12s ease;
   }
   @media (hover:hover){
-    .note-btn:hover{color:var(--text);border-color:var(--border-hover);border-width:2px}
+    .note-btn:hover{color:var(--text);border-color:var(--border-hover);outline:1px solid var(--border-hover)}
   }
   .note-btn-primary{border-color:var(--today-line);color:var(--accent)}
   @media (hover:hover){
-    .note-btn-primary:hover{border-color:var(--accent);border-width:2px;color:var(--accent)}
+    .note-btn-primary:hover{border-color:var(--accent);outline:1px solid var(--accent);color:var(--accent)}
   }
 
   /* ---------- Event list ---------- */
@@ -1745,7 +1755,7 @@
      бы действие, которого нет. Выбранная метка залита цветом и рамки не имеет,
      поэтому тоже исключена. */
   @media (hover:hover){
-    .tag.stream-tag:not(.active):hover{border-width:2px}
+    .tag.stream-tag:not(.active):hover{outline:1px solid var(--border-soft)}
   }
   /* Matches the selected stream chip in the filter row. */
   .tag.stream-tag.active{background:var(--mode);color:#fff;border-color:transparent}
@@ -1977,7 +1987,7 @@
   }
   .lock-input:focus{border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
   @media (hover:hover){
-    .lock-input:hover{border-width:2px}
+    .lock-input:hover{outline:1px solid var(--border-soft)}
   }
   .lock-card .btn{width:100%}
   /* Пока идёт проверка, кнопка гаснет и перестаёт отзываться на наведение:
