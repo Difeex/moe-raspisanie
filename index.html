@@ -2170,6 +2170,27 @@
   </form>
 </div>
 
+<!-- Окно «вышла новая версия». Одето теми же классами, что диалог
+     подтверждения: это такое же модальное окно поверх приложения, и заводить
+     ему собственный вид незачем.
+
+     Отличий от диалога два, и оба намеренные. Кнопка одна: выбора здесь нет,
+     сообщение можно только прочитать. И нажатие по подложке окно не закрывает —
+     в диалоге щелчок мимо означает «передумал», а тут передумывать нечего.
+
+     Перезагружать страницу за человека нельзя: в поле заметки может лежать
+     недописанный текст. Поэтому окно только просит перезапустить приложение и
+     ничего не делает само. -->
+<div class="confirm-overlay" id="buildOverlay">
+  <div class="confirm-card glass">
+    <h3>Вышла новая версия</h3>
+    <p>Перезапустите приложение на своём устройстве, чтобы она заработала.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-primary" id="buildOkBtn" type="button">ОК</button>
+    </div>
+  </div>
+</div>
+
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-card glass">
     <h3 id="confirmTitle"></h3>
@@ -2684,7 +2705,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function collectDom(){
     ['app','uploadBtn','fileInput','fileInputInline','dropzone','noDataCard','uploadError','uploadErrorText','clearDataBtn',
      'loadNotice','loadNoticeText','loadNoticeList','loadNoticeBody','loadNoticeClose','loadNoticeChevron','uploadErrorClose',
-     'confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
+     'buildOverlay','buildOkBtn','confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
      'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
@@ -4715,6 +4736,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     window.addEventListener('resize', closeStreamMenu);
 
     el.clearDataBtn.addEventListener('click', askClearData);
+    el.buildOkBtn.addEventListener('click', function(){
+      el.buildOverlay.classList.remove('open');
+      // По этой паре записей видно, дошла ли просьба до человека: «available»
+      // пишет announceNewBuild, «acknowledged» — то, что окно закрыли.
+      logEvent('app', 'new build acknowledged');
+    });
     el.confirmCancelBtn.addEventListener('click', closeConfirm);
     el.confirmOkBtn.addEventListener('click', function(){
       // Both the action and the staged data are captured first — closeConfirm
@@ -5449,6 +5476,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       }
       openLock(function(){
         document.documentElement.classList.remove('auth-pending');
+        показатьОтложенноеОкноСборки();
         el.logoutBtn.style.display = '';
       });
     });
@@ -6748,6 +6776,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // достаточно вернуть на экран то, что и так отрисовано.
   function startApp(){
     document.documentElement.classList.remove('auth-pending');
+    показатьОтложенноеОкноСборки();
     if(session) el.logoutBtn.style.display = '';
     var stored = loadFromStorage();
     if(stored && stored.events.length){
@@ -6875,8 +6904,35 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // Уезжает сразу: по этой записи видно, что человек увидел просьбу
     // перезапуститься, и дальше по журналу — послушался ли он.
     scheduleLogSync();
-    // Здесь приложенческая линия показывает модальное окно. Пока его нет,
-    // событие живёт только в журнале.
+    показатьОкноСборки();
+  }
+
+  /* Окно «вышла новая версия».
+
+     Показывается один раз за сессию — за этим следит сама announceNewBuild,
+     здесь повторов не сторожим.
+
+     Отсрочка нужна ровно для одного случая: сообщение от service worker
+     приходит через секунду-другую после открытия страницы, и человек в этот
+     момент может ещё стоять в форме входа. Приложение тогда скрыто целиком, и
+     окно всплыло бы за формой — то есть нигде. Запоминаем и показываем сразу
+     после входа. */
+  var ждётОкноСборки = false;
+
+  function показатьОкноСборки(){
+    if(document.documentElement.classList.contains('auth-pending')){
+      ждётОкноСборки = true;
+      return;
+    }
+    ждётОкноСборки = false;
+    el.buildOverlay.classList.add('open');
+    // Окно блокирующее, и уйти из него можно только кнопкой — значит с
+    // клавиатуры она должна быть под рукой сразу.
+    el.buildOkBtn.focus();
+  }
+
+  function показатьОтложенноеОкноСборки(){
+    if(ждётОкноСборки) показатьОкноСборки();
   }
 
   /* Не вышла ли новая сборка.
