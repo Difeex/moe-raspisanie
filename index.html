@@ -1618,7 +1618,14 @@
     display:flex;align-items:flex-start;gap:10px;
     padding:11px 14px;border-radius:var(--radius-lg);
     background:var(--surface-soft);border:1px solid var(--border-soft);
-    font-size:13.5px;line-height:1.45;color:var(--text);
+    /* Кегль 13px один на все три состояния. Раньше здесь стояли 13.5px, а
+       приглашение отдельно ужималось до 13 — и написанная заметка оказывалась
+       на полпункта крупнее пустой. На глаз это читалось как дрожание текста
+       при переходе: строка съезжала вниз на четверть пикселя, а сама плашка
+       становилась выше на 0.73px (высота строки 19.575 против 18.85).
+       Эталоном владелец назначил пустое приглашение — по нему и выровнены
+       остальные. */
+    font-size:13px;line-height:1.45;color:var(--text);
     text-align:left;width:100%;font-family:inherit;
     cursor:text;transition:border-color .12s ease, background .12s ease, color .12s ease;
   }
@@ -1647,7 +1654,9 @@
        жирным оно спорило с заголовками дней в списке, хотя ничего не
        возглавляет. Жирность осталась отклику на наведение. */
     color:var(--note-strong);
-    font-weight:400;font-size:13px;
+    /* Кегль теперь общий, он задан на .note-block. Здесь осталось только
+       начертание: обычное, а не жирное. */
+    font-weight:400;
     /* Заливка та же, что была только под курсором. Прозрачной плашка
        проваливалась в панель: рамка висела на пустом месте, и приглашение
        читалось разметкой, а не полем, в которое пишут. Теперь отклик на
@@ -1708,7 +1717,9 @@
   .note-edit.visible{display:flex}
   .note-edit textarea{
     width:100%;border:none;outline:none;background:transparent;resize:none;
-    font-family:inherit;font-size:13.5px;line-height:1.45;color:var(--text);
+    /* Тот же кегль, что у написанной заметки: иначе текст менял размер в
+       момент, когда правку открывают и закрывают. */
+    font-family:inherit;font-size:13px;line-height:1.45;color:var(--text);
     min-height:52px;padding:0;
   }
   .note-row{display:flex;align-items:center;gap:8px}
