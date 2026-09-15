@@ -1685,11 +1685,14 @@
   .event-card.expanded .event-detail{display:flex}
   .event-detail .detail-warn{color:var(--warn-text)}
 
+  /* Поля вдвое меньше прежних 50px: столько воздуха просил значок в 40px,
+     стоявший над текстом. Без него прежние поля оставляли посреди панели
+     пустую полосу высотой с карточку занятия. */
   .empty-state{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
-    padding:50px 20px;text-align:center;color:var(--text-muted);border-radius:var(--radius-lg);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    padding:26px 20px;text-align:center;color:var(--text-muted);border-radius:var(--radius-lg);
   }
-  .empty-state svg{width:40px;height:40px;stroke:var(--text-faint)}
+  #emptyStateText{font-size:14px;line-height:1.45;max-width:34ch}
 
   /* ---------- No-data placeholder (inline, non-blocking) ----------
      Вертикальных полей нет намеренно: карточка прозрачная и центрируется в
@@ -2295,8 +2298,11 @@
         <span id="holidayBannerText"></span>
       </div>
       <div class="event-list" id="eventList"></div>
+      <!-- Значка здесь нет намеренно. Календарь с галочкой повторял то, что и
+           так стоит выше — сам календарь во весь экран, — и занимал место
+           единственным крупным пятном в панели, хотя сообщать ему было
+           нечего. Осталось то, что говорит: почему пусто и что можно сделать. -->
       <div class="empty-state" id="emptyState" style="display:none">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg>
         <div id="emptyStateText">Занятий не найдено</div>
         <button class="btn btn-reset btn-sm" id="emptyResetBtn">Сбросить фильтры</button>
       </div>
@@ -2889,7 +2895,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
-     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn',
+     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayBanner','holidayBannerText','eventList','emptyState','emptyStateText','emptyResetBtn',
      'noteBlock','noteBody','noteEdit','noteInput','noteDeleteEdit','noteDone'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
@@ -4312,7 +4318,27 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.eventList.style.display = filtered.length ? 'flex' : 'none';
     el.emptyState.style.display = filtered.length ? 'none' : 'flex';
 
-    if(!filtered.length) return;
+    if(!filtered.length){
+      // Пусто по трём разным причинам, и человеку важно, по какой именно:
+      // в одном случае делать нечего, в двух других достаточно снять отбор.
+      // Прежде во всех трёх было написано одно «Занятий не найдено», и день
+      // без занятий выглядел так же, как день, спрятанный фильтром.
+      var вДне = filters.date
+        ? events.some(function(e){ return e.dateKey === filters.date; })
+        : true;
+      var поправимо = вДне;
+      el.emptyStateText.textContent = !вДне
+        ? 'В этот день занятий нет'
+        : (filters.date
+            ? 'В этот день нет занятий по выбранным фильтрам'
+            : 'Ничего не найдено по выбранным фильтрам');
+      // Кнопка появляется, только когда отбор и есть причина пустоты. В дне,
+      // где занятий нет вовсе, снятие фильтров ничего не покажет, а кнопка
+      // обещала бы обратное; вернуться к полному списку человек может
+      // крестиком в чипе даты, он стоит прямо над этим местом.
+      el.emptyResetBtn.style.display = поправимо ? '' : 'none';
+      return;
+    }
 
     var groups = [], currentKey = null, currentGroup = null;
     filtered.forEach(function(e){
