@@ -1584,7 +1584,7 @@
      Прежний --surface-soft (0.4 против 0.62) давал заметно более тусклое
      пятно, и на фоне соседних карточек отклик выглядел неуверенным. */
   @media (hover:hover){
-    .note-block.empty:hover{background:var(--surface);color:var(--text)}
+    .note-block.empty:hover{background:var(--surface);color:var(--text);border-width:2px}
   }
   /* Написанная заметка берёт цвет уголка из календаря — тот же тон в обоих
      местах, иначе признак и содержание читались бы как разные вещи. */
@@ -1605,6 +1605,7 @@
   @media (hover:hover){
     .note-block.filled:hover{
       border-color:color-mix(in srgb, var(--note-strong) 62%, transparent);
+      border-width:2px;
       box-shadow:0 4px 12px color-mix(in srgb, var(--note-strong) 20%, transparent);
     }
   }
