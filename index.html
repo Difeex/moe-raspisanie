@@ -3715,12 +3715,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
               filters.streams.size || filters.search.trim());
   }
 
-  // Действует ли хоть один фильтр. Дата считается наравне с остальными: её
-  // снимает та же кнопка «Сбросить».
-  function фильтрыДействуют(){
-    return !!filters.date || отборВключён();
-  }
-
   function updateFilterBarActiveStates(){
     // Scoped to the filter bar: the date chip is also a .chip-btn but is not
     // driven by a filter group, so it must keep its own selected state.
@@ -3732,7 +3726,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       else { btn.style.background = ''; btn.style.color = ''; }
     });
     // Коралловой «Сбросить» остаётся, только пока есть что снимать: см. .idle.
-    el.resetFilters.classList.toggle('idle', !фильтрыДействуют());
+    // Дата в счёт не идёт — кнопка её больше не снимает, и окрашиваться из-за
+    // неё значило бы обещать действие, которого не будет.
+    el.resetFilters.classList.toggle('idle', !отборВключён());
   }
 
   // Легенда служит календарю, а не полосе фильтров, и потому её состав с
@@ -4161,7 +4157,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         // 'date' полоса фильтров ещё видна на 180px ниже, и кнопка в панели
         // повторяла бы ту, что стоит в самой полосе. Заодно чипу даты
         // достаётся её ширина — в панели она стоит 103px из 242.
-        fillFilterChips(el.scrollFiltersList, parts, 'scrollFiltersReset', stage === 'all');
+        // Кнопка сброса — только когда есть что сбрасывать. На ступени 'date'
+        // в панели стоит один чип даты, а её сброс не снимает; без этой
+        // проверки там оказалась бы кнопка, которая ничего не делает.
+        fillFilterChips(el.scrollFiltersList, parts, 'scrollFiltersReset',
+                        stage === 'all' && отборВключён());
         shownStage = stage;
         lastCollapseKey = '';
       }
@@ -4901,8 +4901,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       renderAll();
     });
 
+    // Выбранный день сбросом не снимается — ни отсюда, ни из плавающей панели,
+    // ни из пустого состояния. У даты свои средства снятия, и оба стоят на
+    // виду: крестик в чипе даты и счётчик занятий рядом с ним. Общий сброс
+    // отвечает за условия отбора, а день — это не условие, а место, куда
+    // человек пришёл; уводить его оттуда заодно с фильтрами неверно.
     function resetAll(){
-      filters = { workTypes:new Set(), modes:new Set(), streams:new Set(), search:'', date:null };
+      filters = { workTypes:new Set(), modes:new Set(), streams:new Set(),
+                  search:'', date:filters.date };
       el.searchInput.value = '';
       renderAll();
     }
