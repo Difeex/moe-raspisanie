@@ -754,7 +754,10 @@
      Подложка и скругление те же, что у счётчика: это две пометки одного рода.
      Подпись набрана основным тоном, а не приглушённым, — день важнее числа. */
   .divider-date{
-    display:inline-flex;align-items:center;gap:7px;flex:none;
+    /* Зазор 5px, а не 7: после обрезки viewBox крест встал вплотную к краям
+       своей коробки, и прежние 7px вместе с пустотой внутри рисунка давали от
+       подписи целых 10px. */
+    display:inline-flex;align-items:center;gap:5px;flex:none;
     font-size:12.5px;font-weight:700;line-height:1;
     color:var(--text);background:rgba(31,41,55,0.05);
     /* Поля и скругление — как у чипа дня в списке (6x12 и 9px), а не прежние
@@ -768,7 +771,11 @@
   /* Крестик — признак того, что пометка нажимается, а не отдельная кнопка:
      цель для пальца остаётся во всю врезку. */
   .divider-date-x{display:inline-flex;align-items:center;color:var(--text-faint);transition:color .12s ease}
-  .divider-date-x svg{width:12px;height:12px}
+  /* 9px, а не прежние 12: после обрезки viewBox та же коробка даёт куда более
+     крупный крест — при 12px он вырастал с 6 до 9 пикселей и начинал спорить с
+     подписью. На 9px видимый крест 6.8px, то есть почти прежний, а пустоты по
+     краям остаётся чуть больше пикселя вместо трёх. */
+  .divider-date-x svg{width:9px;height:9px}
   /* Тот же отклик, что у чипа дня в списке: это один и тот же чип в двух
      положениях, и отзываться врозь они не должны. Прежде здесь подложка просто
      уплотнялась до 9%.
@@ -2024,7 +2031,12 @@
              пометка нажимается: цель для пальца остаётся во всю врезку. -->
         <button class="divider-date" id="dateChip" style="display:none" title="Снять фильтр по дате">
           <span id="dateChipLabel"></span>
-          <span class="divider-date-x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          <!-- viewBox обрезан по самому кресту. Он нарисован от 6 до 18, то есть
+               в середине квадрата 24, и при окне 0 0 24 24 вокруг него оставалось
+               по четверти ширины пустоты. Эта пустота складывалась с зазором от
+               подписи и отодвигала крест от правого края чипа — он читался
+               смещённым, хотя коробка стояла ровно по центру. -->
+          <span class="divider-date-x"><svg viewBox="4 4 16 16" fill="none" stroke="currentColor"
             stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
         </button>
         <span class="divider-line"></span>
