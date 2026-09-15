@@ -1393,8 +1393,21 @@
      календарь и стоит прямо под ним, поэтому обязана расти вместе с ним. Пока
      потолки были рассчитаны на колонку 400px, под сеткой с ячейкой 103px
      оставалась подпись десктопного кегля с точками от телефона. */
+  /* Размеры округляются до целого пикселя функцией round(). Легенда растёт
+     вместе с календарём, и её кегль — доля от ширины колонки: на 400px это
+     13.2px, и подпись вставала на дробную отметку, а точка рядом — на свою.
+     На экране с двойной плотностью дробь в четверть пикселя не нарисовать,
+     она размазывается, и на iPad это видно как нечёткие подписи.
+
+     Обычное объявление оставлено строкой выше намеренно: round() есть в Safari
+     с 15.4 и в Chrome с 125, браузер постарше просто пропустит вторую строку и
+     останется на прежнем поведении. Шаг роста при этом становится
+     пиксельным — на глаз разницы с плавным нет, кегль меняется на те же доли,
+     только с округлением. */
   .legend-item{display:flex;align-items:center;gap:8px;font-size:clamp(12px,3.3cqw,17px);line-height:1;color:var(--text-muted)}
+  .legend-item{font-size:round(clamp(12px,3.3cqw,17px),1px)}
   .legend-dot{width:clamp(14px,2.4cqw,20px);height:clamp(6px,1.05cqw,9px);border-radius:999px;flex:none}
+  .legend-dot{width:round(clamp(14px,2.4cqw,20px),1px);height:round(clamp(6px,1.05cqw,9px),1px)}
   .legend-toggle{
     position:relative;
     background:none;border:none;padding:0;cursor:pointer;font:inherit;
@@ -1411,6 +1424,9 @@
     font-size:clamp(12px,3.3cqw,17px);color:var(--text-muted);
     transition:color .12s ease;
   }
+  /* Округление то же, что у .legend-item, и по той же причине: кегли обязаны
+     совпадать до последней цифры, иначе строка легенды идёт неровно. */
+  .legend-toggle{font-size:round(clamp(12px,3.3cqw,17px),1px)}
   /* The row itself is only ~14px tall — too small for a fingertip. This
      invisible extension brings the hit area to the 44px guideline without
      adding padding that would stretch the legend's spacing. It grows mostly
