@@ -1431,6 +1431,11 @@
   @media (hover:hover){
     .chip-btn.stream-add.menu-open:hover{
       background:var(--mode);color:#fff;border-color:transparent;box-shadow:var(--shadow-sm);
+      /* Обводки нет: пока меню раскрыто, чип залит тёмным и ведёт себя как
+         выбранный, а у выбранных чипов отклика на наведение не бывает. Без
+         этой строки общее правило чипа рисовало вокруг залитого чипа серую
+         рамку — ту самую, от которой он в этом состоянии и избавлен. */
+      outline:none;
     }
   }
   .chip-btn.stream-add.menu-open svg{color:#fff}
