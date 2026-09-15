@@ -761,9 +761,14 @@
      цель для пальца остаётся во всю врезку. */
   .divider-date-x{display:inline-flex;align-items:center;color:var(--text-faint);transition:color .12s ease}
   .divider-date-x svg{width:12px;height:12px}
+  /* Тот же отклик, что у чипа дня в списке: это один и тот же чип в двух
+     положениях, и отзываться врозь они не должны. Прежде здесь подложка просто
+     уплотнялась до 9%.
+     Крестик на тёмной заливке берёт белый вполсилы: полным он спорил бы с
+     подписью, а прежний --mode на --mode не виден вовсе. */
   @media (hover:hover){
-    .divider-date:hover{background:rgba(31,41,55,0.09)}
-    .divider-date:hover .divider-date-x{color:var(--mode)}
+    .divider-date:hover{background:var(--mode);color:#fff}
+    .divider-date:hover .divider-date-x{color:rgba(255,255,255,0.75)}
   }
   .cf-list{display:flex;flex-wrap:wrap;gap:6px}
   /* Read-only chips: deliberately one neutral style, without the fills the
@@ -1354,12 +1359,35 @@
 
      text-transform:capitalize снят намеренно. Он давал «Ср, 2 Сентября» с
      заглавной в месяце, тогда как чип выбранного дня пишет «Ср, 16 сентября»
-     строчной — две подписи одного и того же дня расходились написанием. */
+     строчной — две подписи одного и того же дня расходились написанием.
+
+     Чип нажимается: нажатие выбирает этот день, как если бы человек ткнул в
+     его плитку в календаре. Поэтому это button, а не div — иначе он не берёт
+     фокус и не нажимается с клавиатуры.
+
+     Подпись в покое набрана --text-muted, тем же тоном, что счётчик в черте:
+     это пометка, а не заголовок, и перетягивать внимание с названий занятий
+     ей незачем. */
   .day-group-heading{
     display:inline-flex;align-items:center;width:max-content;
-    font-size:12.5px;font-weight:700;line-height:1;color:var(--text);
+    font-family:inherit;border:none;text-align:left;
+    font-size:12.5px;font-weight:700;line-height:1;color:var(--text-muted);
     background:rgba(31,41,55,0.05);border-radius:9px;padding:6px 12px;
+    cursor:pointer;transition:background .12s ease, color .12s ease;
   }
+  /* Под курсором чип принимает тон выбранного дня — тот самый --mode, которым
+     закрашивается плитка в календаре. Отклик заранее показывает, что случится
+     после нажатия, а не просто сообщает «сюда можно ткнуть».
+
+     Внутри @media (hover:hover) обязательно: на сенсорном экране браузер
+     применяет наведение при касании и снимает только после нажатия в стороне —
+     чип оставался бы тёмным, будто этот день выбран, хотя выбран не он. */
+  @media (hover:hover){
+    .day-group-heading:hover{background:var(--mode);color:#fff}
+  }
+  /* Фокус за медиазапрос не убирается: клавиатура бывает и у сенсорного
+     устройства. :focus-visible от касания не срабатывает. */
+  .day-group-heading:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* Чип первого дня подтягивается к черте на величину своего верхнего поля.
      Панель держит между детьми 14px, и пока подпись была строкой без подложки,
      столько же было и от линии до её букв. У чипа сверху добавились свои 6px,
@@ -3995,8 +4023,30 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     groups.forEach(function(g){
       var groupEl = document.createElement('div'); groupEl.className = 'day-group';
       if(!filters.date){
-        var heading = document.createElement('div'); heading.className = 'day-group-heading';
+        var heading = document.createElement('button');
+        heading.type = 'button';
+        heading.className = 'day-group-heading';
         heading.textContent = formatDayHeading(g.date, weekdayShort(g.date));
+        heading.title = 'Показать только этот день';
+        (function(dk){
+          heading.addEventListener('click', function(){
+            /* Календарь переводится на месяц выбранного дня — и это осознанное
+               исключение из правила «месяц двигает только пользователь».
+               Список показывает весь семестр, и нажатый день запросто лежит в
+               другом месяце; не переведи мы календарь, человек выбрал бы
+               8 октября, глядя на сентябрь, и выбранной плитки не увидел бы
+               вовсе. Это не побочное действие фильтра, а прямое указание на
+               конкретный день — тот же случай, что кнопка «Сегодня», которая
+               месяц переключает.
+
+               Прокрутки к списку здесь нет намеренно: человек уже в списке,
+               и дёргать страницу к его началу незачем. */
+            var ч = dk.split('-');
+            viewMonth = { year:Number(ч[0]), monthIndex:Number(ч[1]) - 1 };
+            filters.date = dk;
+            renderAll();
+          });
+        })(g.dateKey);
         groupEl.appendChild(heading);
       }
       var cardsWrap = document.createElement('div'); cardsWrap.className = 'cards';
