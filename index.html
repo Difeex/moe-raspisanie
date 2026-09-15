@@ -466,7 +466,11 @@
      второго — не даёт себя сжать и распирает шапку календаря. */
   .month-label{
     flex:1;min-width:0;text-align:center;white-space:nowrap;overflow:hidden;
-    font-weight:700;font-size:clamp(16px,4.45cqw,20px);text-transform:capitalize;
+    /* Верхняя граница 26px, а не 20: на планшете в портрете колонка календаря
+       занимает 792px, и прежний потолок упирался задолго до неё — заголовок
+       оставался десктопным над вдвое более крупной сеткой. На десктопе (400px)
+       формула по-прежнему даёт 17.8px, там ничего не изменилось. */
+    font-weight:700;font-size:clamp(16px,4.45cqw,26px);text-transform:capitalize;
   }
   /* Один набор правил на два имени: кнопки шапки повторяют «Сегодня» ровно,
      а не приблизительно. Если однажды поменяется этот стиль, он поменяется
@@ -536,12 +540,21 @@
     }
   }
   .weekday-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 2px}
-  .weekday-row span{text-align:center;font-size:clamp(11px,3.05cqw,13px);font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em}
+  /* Потолок 16px вместо 13px — по той же причине, что у заголовка месяца:
+     на 792px формула давала бы 24px, но упиралась в величину, подобранную под
+     колонку 400px. На десктопе и телефоне значение не меняется. */
+  .weekday-row span{text-align:center;font-size:clamp(11px,3.05cqw,16px);font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em}
   .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
   .day-cell{
     /* Days with lessons carry the «Сегодня» button's resting border; days
        without one clear it below, so only actionable days are outlined. */
-    aspect-ratio:1/0.98;border-radius:var(--radius-md);border:1px solid var(--border-soft);
+    /* Скругление здесь своё, а не общий --radius-md: плитка дня — единственный
+       элемент, который сам растёт вместе с шириной календаря, от 37px на
+       телефоне до 103px на планшете в портрете. Радиус обязан идти за ней,
+       иначе на планшете плитка выглядит почти прямоугольной, а уголок заметки
+       (он завязан на радиус) теряет опору. Нижняя граница 14px — прежнее
+       значение --radius-md, так что телефон и десктоп не меняются. */
+    aspect-ratio:1/0.98;border-radius:clamp(14px,2.4cqw,22px);border:1px solid var(--border-soft);
     background:var(--surface-soft);display:flex;flex-direction:column;align-items:center;
     justify-content:flex-start;cursor:pointer;position:relative;
     transition:background .15s ease, border-color .15s ease, transform .15s ease, box-shadow .15s ease;
@@ -583,7 +596,9 @@
      день есть занятия» несёт рамка, поэтому число его не дублирует.
      Специфичность здесь намеренно низкая (0,2,0): правила .selected,
      .is-today и .no-events сильнее и сохраняют свой цвет. */
-  .day-cell .num{font-size:clamp(13px,3.6cqw,16px);font-weight:600;line-height:1;color:var(--text-muted);transition:color .15s ease}
+  /* Потолок 22px: на планшете ячейка вырастает до 103px, и число в 16px
+     висело в ней крошечной точкой — потолок был рассчитан на ячейку 47px. */
+  .day-cell .num{font-size:clamp(13px,3.6cqw,22px);font-weight:600;line-height:1;color:var(--text-muted);transition:color .15s ease}
   /* Под курсором все дни темнеют одинаково, до --text: свободные,
      отфильтрованные и праздничные тоже. Раньше они откликались на ступень
      слабее, чтобы под курсором сохранялась разница с днями, где занятия есть,
@@ -621,8 +636,11 @@
      Фиксированные 6px сохранялись при любом экране, а ячейка от десктопа к
      360px худеет на пятую часть, и полоска занимала уже не 13% её высоты, а
      16.5% — выглядела грубо. Верхняя граница 6px оставляет десктоп прежним,
-     нижняя 4px не даёт полоске выродиться в нитку. */
-  .calendar-grid{--strip-h:clamp(4px,1.5cqw,6px)}
+     нижняя 4px не даёт полоске выродиться в нитку.
+     Верхняя граница поднята с 6px до 9px: 6px рассчитывались на ячейку 47px,
+     а на планшете в портрете она втрое толще — 103px, и полоска занимала там
+     6% высоты вместо привычных 13%. */
+  .calendar-grid{--strip-h:clamp(4px,1.5cqw,9px)}
   .day-dots{display:flex;align-items:center;gap:2px;width:100%;height:var(--strip-h);margin-top:auto}
   .day-dot{flex:1 1 0;min-width:0;height:var(--strip-h);border-radius:999px}
   /* Filtered out, but still there: keeps its type colour, just faded. */
@@ -645,19 +663,27 @@
      — она уже значит «в этот день есть занятия».
      Как и рамка, уголок от фильтров не зависит: заметка либо написана, либо нет.
 
-     Размер фиксированный — 18px, и это единственное отличие от толщины полосок
-     и кегля чисел, которые тянутся за шириной календаря через cqw. Причина в
-     том, что уголок упирается в величину, которая не масштабируется: скругление
-     плитки всегда 14px. Всё, что меньше примерно полутора радиусов, обрезается
-     почти целиком, и вместо закрашенного угла остаётся серп вдоль края.
-     Пробовали clamp(14px,4.5cqw,18px): на десктопе он давал ровно 18px, но на
-     360px ужимал уголок до 14.9px при том же радиусе 14px — ровно в тот серп.
-     Поэтому 18px держатся на всех ширинах; на 360px ячейка худеет с 47 до 37px,
-     и уголок занимает там большую долю плитки — это принято сознательно, потому
-     что альтернатива не «мельче», а «неразличимо». */
+     Уголок связан со скруглением плитки и обязан меняться только вместе с ним:
+     всё, что меньше примерно полутора радиусов, обрезается почти целиком, и
+     вместо закрашенного угла остаётся серп вдоль края. Поэтому у обоих одна
+     формула от ширины календаря, а нижние границы совпадают с прежними
+     жёсткими значениями — 18px у уголка и 14px у радиуса.
+
+     Нижняя граница здесь важнее верхней. Пробовали clamp(14px,4.5cqw,18px): на
+     360px он ужимал уголок до 14.9px при радиусе 14px — ровно в тот серп.
+     Поэтому пол именно 18px, и на телефоне уголок занимает большую долю
+     плитки — это принято сознательно, потому что альтернатива не «мельче», а
+     «неразличимо».
+
+     Верхняя граница 30px появилась после проверки на iPad: в портрете это
+     мобильная ветка на широком экране, колонка календаря 792px, ячейка 103px —
+     и прежние жёсткие 18px занимали в ней 17% против 38% на десктопе, то есть
+     превращались в точку. Потолок ставится ниже расчётных 35.6px намеренно:
+     уголок — признак, а не украшение, и разрастаться во весь угол плитки ему
+     незачем. */
   .day-cell.has-note::after{
     content:"";position:absolute;top:0;right:0;
-    width:18px;height:18px;
+    width:clamp(18px,4.5cqw,30px);height:clamp(18px,4.5cqw,30px);
     background:var(--note-mark);
     clip-path:polygon(0 0, 100% 0, 100% 100%);
   }
@@ -1019,8 +1045,12 @@
        ниже не пойдёт, шрифт вшит в файл — ширины подписей не поплывут. */
     .legend{flex-direction:row;flex-wrap:wrap;align-items:center;column-gap:10px;row-gap:8px}
   }
-  .legend-item{display:flex;align-items:center;gap:8px;font-size:clamp(12px,3.3cqw,14px);line-height:1;color:var(--text-muted)}
-  .legend-dot{width:14px;height:6px;border-radius:999px;flex:none}
+  /* Потолки 17px у подписи и 20×9 у точки — ради планшета: легенда объясняет
+     календарь и стоит прямо под ним, поэтому обязана расти вместе с ним. Пока
+     потолки были рассчитаны на колонку 400px, под сеткой с ячейкой 103px
+     оставалась подпись десктопного кегля с точками от телефона. */
+  .legend-item{display:flex;align-items:center;gap:8px;font-size:clamp(12px,3.3cqw,17px);line-height:1;color:var(--text-muted)}
+  .legend-dot{width:clamp(14px,2.4cqw,20px);height:clamp(6px,1.05cqw,9px);border-radius:999px;flex:none}
   .legend-toggle{
     position:relative;
     background:none;border:none;padding:0;cursor:pointer;font:inherit;
@@ -1031,7 +1061,10 @@
        строку подписи прыгали на 1.4px, подстраиваясь под самый высокий
        элемент ряда. */
     line-height:1;
-    font-size:clamp(12px,3.3cqw,14px);color:var(--text-muted);
+    /* Кегль обязан совпадать с .legend-item до последней цифры: переключатель
+       стоит в одном ряду с подписями, и расхождение сразу видно неровной
+       строкой. Потолок поднят вместе с ними. */
+    font-size:clamp(12px,3.3cqw,17px);color:var(--text-muted);
     transition:color .12s ease;
   }
   /* The row itself is only ~14px tall — too small for a fingertip. This
