@@ -1576,16 +1576,17 @@
   }
   .note-block svg{width:16px;height:16px;stroke:currentColor;color:var(--text-faint);flex:none;margin-top:1px}
   .note-body{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}
-  /* Пустое приглашение — пунктиром, тем же приёмом, что зона перетаскивания
-     файла в карточке «расписание ещё не загружено», и тише всего в панели:
-     пока заметки нет, оно не должно спорить с расписанием.
-     Заливки оно не получает — красить нечего, — но пунктир и значок берут цвет
+  /* Пустое приглашение — сплошной линией, как у всего остального в панели.
+     Пунктир тут был от зоны перетаскивания файла, но родство оказалось ложным:
+     туда файл бросают, а сюда пишут, нажав, — и пунктир среди сплошных рамок
+     читался как незаконченный элемент, а не как приглашение.
+     Заливки оно не получает — красить нечего, — но линия и значок берут цвет
      заметки: приглашение заранее показывает, какой она станет, если её
      написать. Подпись при этом --text-muted, тон заголовков дней и «Сбросить»,
      а не самый светлый --text-faint: с ним приглашение было самым выцветшим
      пятном на экране. */
   .note-block.empty{
-    border-style:dashed;border-color:var(--note-line);background:transparent;
+    border-color:var(--note-line);background:transparent;
     color:var(--text-muted);
     font-weight:600;font-size:13px;
   }
@@ -1599,7 +1600,7 @@
      Прежний --surface-soft (0.4 против 0.62) давал заметно более тусклое
      пятно, и на фоне соседних карточек отклик выглядел неуверенным. */
   @media (hover:hover){
-    .note-block.empty:hover{background:var(--surface);color:var(--text);outline:1px dashed var(--note-line)}
+    .note-block.empty:hover{background:var(--surface);color:var(--text);outline:1px solid var(--note-line)}
   }
   /* Написанная заметка берёт цвет уголка из календаря — тот же тон в обоих
      местах, иначе признак и содержание читались бы как разные вещи. */
