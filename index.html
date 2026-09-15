@@ -167,6 +167,10 @@
     /* Today is outlined in a softened accent so it reads as a marker rather
        than as a selection; hover deepens it to the full accent. */
     --today-line:rgba(59,111,214,0.55);
+    /* Цвет праздника. Прежде жил только в плашке, теперь — в теге черты и в
+       окне; вынесен в переменные, чтобы два места не разошлись. */
+    --holiday-soft:rgba(207,130,136,0.13);
+    --holiday-text:#96525a;
     --text:#20293a;
     --text-muted:#66707f;
     --text-faint:#9aa3b2;
@@ -874,6 +878,54 @@
   /* Кегль меньше всего остального в панели: счётчик — служебная пометка, а не
      содержание. line-height:1 обязателен — иначе строка распирает промежуток
      между управлением и списком. */
+  /* Тег праздника — третья врезка в черте, справа от чипа даты. Рост,
+     скругление и поля те же, что у чипа и счётчика: три пометки одной семьи.
+     Цвет достался прежней плашке праздника, чтобы признак не менял окраску при
+     переезде в черту.
+
+     Значок — хлопушка с окном, обрезанным по самому рисунку: в поле 24×24 тушь
+     занимала левый низ, и значок читался завалившимся. Тот же приём, которым
+     чинили крестик во врезках.
+
+     Хлопушка, а не календарь и не солнце. Календарь повторял бы то, что и так
+     видно выше, а солнце обещало бы выходной — между тем часть записей в
+     таблице праздников это «перенос праздника на рабочий день», и работать в
+     такой день как раз надо. */
+  .divider-holiday{
+    display:inline-flex;align-items:center;gap:7px;flex:none;
+    font-size:12.5px;font-weight:700;line-height:1;font-family:inherit;
+    color:var(--holiday-text);background:var(--holiday-soft);
+    border:none;border-radius:9px;padding:6px 12px;
+    cursor:pointer;white-space:nowrap;
+    transition:background .12s ease, color .12s ease;
+  }
+  .divider-holiday svg{width:14px;height:14px;flex:none}
+  @media (hover:hover){
+    .divider-holiday:hover{background:var(--holiday-text);color:#fff}
+  }
+  .divider-holiday:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* Порог свёртывания — по ширине самой черты, а не окна, и вот почему.
+     Узкое место не телефон, а десктоп у самой границы 861px: там список сжат
+     календарём до 393px, тогда как на телефоне 360px панель занимает 332px и
+     ниже 861px раскладка вообще становится одноколоночной. Одним медиазапросом
+     эти два случая не выразить — нужен контейнерный запрос.
+
+     Замерено: постоянная часть черты — хвосты 2×14, чип даты 127 (самая длинная
+     подпись, «Чт, 31 декабря»), тег 107, счётчик 89 и промежутки 5×8 — всего
+     391px. При 392px линии между врезками остаётся 1px, при 372 врезки лезут
+     друг на друга. Порог взят 420px: там от линии остаётся 28px и черта ещё
+     читается чертой. Свёрнутый тег занимает 32px вместо 107.
+
+     Контейнер объявлен на самой черте, а не на панели: ширина у них одна и та
+     же (у черты поля -21px, ровно на отступ панели и её рамку), а внутри черты
+     нет ничего, чему могло бы помешать ограничение раскладки. */
+  .panel-divider{container-type:inline-size}
+  @container (max-width:419px){
+    .divider-holiday{padding:6px 9px}
+    .divider-holiday-label{display:none}
+  }
+
   /* Счётчик сидит на своей подложке, а не просто висит в разрыве линии: так
      он читается как отдельная пометка на панели, а не как обрывок черты.
      Фон — серый с прозрачностью, а не сплошной цвет под панель: панель сама
@@ -1837,15 +1889,6 @@
 
   /* Same shape as the upload banner, in the holiday tone rather than red — it
      states a fact about the day, it is not a failure. */
-  .holiday-banner{
-    display:none;align-items:flex-start;gap:10px;
-    padding:12px 16px;border-radius:var(--radius-lg);
-    background:rgba(207,130,136,0.13);border:1px solid rgba(207,130,136,0.3);
-    color:#96525a;font-size:13.5px;font-weight:600;line-height:1.4;
-  }
-  .holiday-banner.visible{display:flex}
-  .holiday-banner svg{width:18px;height:18px;stroke:currentColor;flex:none;margin-top:1px}
-
   /* ---------- Confirm dialog ---------- */
   .btn-danger{background:linear-gradient(135deg,#d64545,#e2685f);color:#fff;border:none;box-shadow:0 8px 20px rgba(214,69,69,0.28)}
   .confirm-overlay{
@@ -2249,6 +2292,14 @@
           <span class="divider-date-x"><svg viewBox="4 4 16 16" fill="none" stroke="currentColor"
             stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
         </button>
+        <!-- Тег праздника. Стоит справа от даты, потому что относится именно к
+             ней: сначала какой день, потом чем он особенный. Нажатие открывает
+             окно с полным текстом — в самой черте места на «Перенос выходного
+             с 4 января (Новогодние каникулы)» нет и быть не может. -->
+        <button class="divider-holiday" id="holidayChip" type="button" style="display:none">
+          <svg viewBox="3.5 2.5 18.3 18.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5L9.8 7.8l6.4 6.4z"/><path d="M13.4 6.4V4.2M16.8 8l1.6-1.6M18.6 11.2h2.2"/></svg>
+          <span class="divider-holiday-label">Праздник</span>
+        </button>
         <span class="divider-line"></span>
         <!-- Счётчик нажимается, когда выбран день: нажатие снимает отбор по
              дате, не трогая остальные условия. Это button, а не span, чтобы он
@@ -2288,10 +2339,6 @@
           <button class="note-btn" id="noteDeleteEdit" type="button">Удалить</button>
           <button class="note-btn note-btn-primary" id="noteDone" type="button">Готово</button>
         </div>
-      </div>
-      <div class="holiday-banner" id="holidayBanner">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
-        <span id="holidayBannerText"></span>
       </div>
       <div class="event-list" id="eventList"></div>
       <!-- Здесь осталась одна строка — та, что называет причину пустоты.
@@ -2370,6 +2417,19 @@
     <p>Все ваши данные будут сохранены после перезапуска.</p>
     <div class="confirm-actions">
       <button class="btn btn-primary btn-wide" id="buildOkBtn" type="button">ОК</button>
+    </div>
+  </div>
+</div>
+
+<!-- Окно праздника. Отдельное от окна подтверждения: там два действия и
+     предупреждение о потере данных, здесь одно сообщение и «понятно». Заголовком
+     стоит дата — иначе окно приходится соотносить с календарём по памяти. -->
+<div class="confirm-overlay" id="holidayOverlay">
+  <div class="confirm-card glass">
+    <h3 id="holidayDate"></h3>
+    <p id="holidayMessage"></p>
+    <div class="confirm-actions">
+      <button class="btn btn-primary btn-wide" id="holidayOkBtn" type="button">ОК</button>
     </div>
   </div>
 </div>
@@ -2893,7 +2953,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
-     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayBanner','holidayBannerText','eventList','emptyState','emptyStateText',
+     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayChip','holidayOverlay','holidayDate','holidayMessage','holidayOkBtn','eventList','emptyState','emptyStateText',
      'noteBlock','noteBody','noteEdit','noteInput','noteDeleteEdit','noteDone'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
@@ -4281,9 +4341,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function renderList(){
     // Праздники зашиты в приложение и не зависят от файла, поэтому баннер
     // работает и до загрузки расписания — календарь кликабелен уже тогда.
-    var holidayLabel = filters.date ? holidayText(filters.date) : '';
-    el.holidayBannerText.textContent = holidayLabel;
-    el.holidayBanner.classList.toggle('visible', !!holidayLabel);
+    // Праздник теперь помечает тег во врезке, а не плашка в теле списка.
+    // Плашка занимала полосу во всю ширину панели ровно там, куда человек
+    // смотрит, когда ищет занятия, и отодвигала список вниз — при том что
+    // сообщение это справочное и читается один раз.
+    el.holidayChip.style.display = (filters.date && holidayText(filters.date)) ? '' : 'none';
 
     // День недели всюду считается из самой даты, а не берётся из поля day,
     // куда разбор кладёт текст строки-разделителя выгрузки. Тот текст пишет
@@ -4722,6 +4784,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     confirmAction = onOk;
     el.confirmOverlay.classList.add('open');
   }
+  // Окно праздника. Текст тот же, что стоял в плашке; заголовком идёт дата,
+  // посчитанная из ключа, а не взятая из выгрузки, — как и во всех остальных
+  // подписях дня.
+  function показатьПраздник(){
+    var текст = filters.date ? holidayText(filters.date) : '';
+    if(!текст) return;
+    var д = dateFromKey(filters.date);
+    el.holidayDate.textContent = formatDayHeading(д, weekdayShort(д));
+    el.holidayMessage.textContent = текст;
+    el.holidayOverlay.classList.add('open');
+    el.holidayOkBtn.focus();
+  }
+  function закрытьПраздник(){
+    if(!el.holidayOverlay.classList.contains('open')) return;
+    el.holidayOverlay.classList.remove('open');
+    // Фокус возвращается туда, откуда окно открыли, — иначе следующий Tab
+    // уводит в начало панели.
+    if(el.holidayChip.style.display !== 'none') el.holidayChip.focus();
+  }
+
   function closeConfirm(){
     el.confirmOverlay.classList.remove('open');
     confirmAction = null;
@@ -4989,6 +5071,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(run) run(staged);
     });
     el.confirmOverlay.addEventListener('click', function(e){ if(e.target === el.confirmOverlay) closeConfirm(); });
+    el.holidayChip.addEventListener('click', показатьПраздник);
+    el.holidayOkBtn.addEventListener('click', закрытьПраздник);
+    el.holidayOverlay.addEventListener('click', function(e){ if(e.target === el.holidayOverlay) закрытьПраздник(); });
     // Форма, а не кнопка с обработчиком: так вход срабатывает и по Enter в
     // поле, и по кнопке «Готово» на экранной клавиатуре телефона.
     el.lockForm.addEventListener('submit', submitPassword);
@@ -5038,6 +5123,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         return;
       }
       if(e.key !== 'Escape') return;
+      if(el.holidayOverlay.classList.contains('open')) закрытьПраздник();
       if(el.confirmOverlay.classList.contains('open')) closeConfirm();
       closeStreamMenu();
     });
