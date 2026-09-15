@@ -366,6 +366,14 @@
   .btn:active{transform:translateY(0)}
   .btn-primary{background:linear-gradient(135deg,var(--lecture),#5b8be8);color:#fff;border:none;box-shadow:0 8px 20px rgba(59,111,214,0.32)}
   .btn-ghost{background:transparent;border:1px solid var(--border-soft);color:var(--text-muted)}
+  /* «Сбросить фильтры» в пустом списке появляется только тогда, когда фильтры
+     что-то спрятали, — значит снимать всегда есть что, и цвет у неё тот же,
+     что у коралловой «Сбросить» в полосе. Серой она обещала бы обратное.
+     Обе кнопки делают одно и то же, и выглядеть должны одинаково. */
+  .btn-reset{border-color:var(--reset-line);color:color-mix(in srgb, var(--reset) 82%, #fff)}
+  @media (hover:hover){
+    .btn-reset:hover{color:var(--reset);background:var(--reset-soft);border-color:var(--reset-line-hover)}
+  }
   .btn-sm{padding:7px 14px;font-size:13px}
   /* Вдвое шире обычной кнопки. Ширина берётся полями, а не min-width: подпись
      тут короткая («ОК»), и при заданной ширине она стояла бы в озере пустоты не
@@ -1313,6 +1321,28 @@
     }
   }
 
+  /* Пока не действует ни один фильтр — ни вид работ, ни формат, ни поток, ни
+     поиск, ни выбранный день, — снимать нечего, и кнопка одета как всякая
+     другая в покое: рамка --border-soft, подпись приглушённая.
+
+     Коралловый цвет у неё не украшение, а признак: он говорит «фильтры стоят,
+     их можно снять». Пока снимать нечего, признак лжёт — кнопка обещает
+     действие, которого не будет. Заодно она переставала отличаться от чипов
+     рядом только цветом, хотя отличается смыслом.
+
+     Наведение здесь тоже нейтральное — то же, что у «Сегодня» и кнопок шапки.
+     Правило специфичнее коралловых, поэтому перебивает их независимо от
+     порядка. */
+  .reset-btn.idle{border-color:var(--border-soft);color:var(--text-muted)}
+  @media (hover:hover){
+    .reset-btn.idle:hover{
+      color:var(--text);
+      background:var(--surface-strong);
+      border-color:var(--border-hover);
+      box-shadow:var(--shadow-sm);
+    }
+  }
+
   /* Mirrors the selected day cell in the calendar, so the same selection
      reads as one colour on both sides. */
   /* Rendered as a selected chip (.chip-btn.active in the markup) so it is
@@ -2131,7 +2161,7 @@
       <div class="empty-state" id="emptyState" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15l2 2 4-4"/></svg>
         <div id="emptyStateText">Занятий не найдено</div>
-        <button class="btn btn-ghost btn-sm" id="emptyResetBtn">Сбросить фильтры</button>
+        <button class="btn btn-reset btn-sm" id="emptyResetBtn">Сбросить фильтры</button>
       </div>
       <!-- Ни иконки загрузки, ни заголовка здесь намеренно нет. Цветная плитка
            со стрелкой повторяла логотип в шапке и спорила с ним за внимание, а
@@ -3529,6 +3559,13 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(add) add.classList.remove('menu-open');
   }
 
+  // Действует ли хоть один фильтр. Дата считается наравне с остальными: её
+  // снимает та же кнопка «Сбросить».
+  function фильтрыДействуют(){
+    return !!(filters.date || filters.workTypes.size || filters.modes.size ||
+              filters.streams.size || filters.search.trim());
+  }
+
   function updateFilterBarActiveStates(){
     // Scoped to the filter bar: the date chip is also a .chip-btn but is not
     // driven by a filter group, so it must keep its own selected state.
@@ -3539,6 +3576,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(active){ btn.style.background = btn.dataset.color; btn.style.color = '#fff'; }
       else { btn.style.background = ''; btn.style.color = ''; }
     });
+    // Коралловой «Сбросить» остаётся, только пока есть что снимать: см. .idle.
+    el.resetFilters.classList.toggle('idle', !фильтрыДействуют());
   }
 
   // Легенда служит календарю, а не полосе фильтров, и потому её состав с
