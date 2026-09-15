@@ -389,15 +389,6 @@
   .btn:active{transform:translateY(0)}
   .btn-primary{background:linear-gradient(135deg,var(--lecture),#5b8be8);color:#fff;border:none;box-shadow:0 8px 20px rgba(59,111,214,0.32)}
   .btn-ghost{background:transparent;border:1px solid var(--border-soft);color:var(--text-muted)}
-  /* «Сбросить фильтры» в пустом списке появляется только тогда, когда фильтры
-     что-то спрятали, — значит снимать всегда есть что, и цвет у неё тот же,
-     что у коралловой «Сбросить» в полосе. Серой она обещала бы обратное.
-     Обе кнопки делают одно и то же, и выглядеть должны одинаково. */
-  .btn-reset{border-color:var(--reset-line);color:color-mix(in srgb, var(--reset) 82%, #fff)}
-  @media (hover:hover){
-    .btn-reset:hover{color:var(--reset);background:var(--reset-soft);border-color:var(--reset-line-hover)}
-  }
-  .btn-sm{padding:7px 14px;font-size:13px}
   /* Вдвое шире обычной кнопки. Ширина берётся полями, а не min-width: подпись
      тут короткая («ОК»), и при заданной ширине она стояла бы в озере пустоты не
      по центру, а как придётся, — поля же растят кнопку симметрично от текста. */
@@ -1689,7 +1680,7 @@
      стоявший над текстом. Без него прежние поля оставляли посреди панели
      пустую полосу высотой с карточку занятия. */
   .empty-state{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
     padding:26px 20px;text-align:center;color:var(--text-muted);border-radius:var(--radius-lg);
   }
   /* Ширина по самой длинной из трёх строк — «В этот день нет занятий по
@@ -2303,13 +2294,15 @@
         <span id="holidayBannerText"></span>
       </div>
       <div class="event-list" id="eventList"></div>
-      <!-- Значка здесь нет намеренно. Календарь с галочкой повторял то, что и
-           так стоит выше — сам календарь во весь экран, — и занимал место
-           единственным крупным пятном в панели, хотя сообщать ему было
-           нечего. Осталось то, что говорит: почему пусто и что можно сделать. -->
+      <!-- Здесь осталась одна строка — та, что называет причину пустоты.
+           Значка нет намеренно: календарь с галочкой повторял то, что и так
+           стоит выше, сам календарь во весь экран, и был единственным крупным
+           пятном в панели, хотя сообщать ему было нечего.
+           Кнопки сброса тоже нет: она дословно повторяла «Сбросить» в полосе
+           фильтров, стоявшую в том же экране парой строк выше. Два одинаковых
+           действия рядом заставляют выбирать там, где выбора нет. -->
       <div class="empty-state" id="emptyState" style="display:none">
         <div id="emptyStateText">Занятий не найдено</div>
-        <button class="btn btn-reset btn-sm" id="emptyResetBtn">Сбросить фильтры</button>
       </div>
       <!-- Ни иконки загрузки, ни заголовка здесь намеренно нет. Цветная плитка
            со стрелкой повторяла логотип в шапке и спорила с ним за внимание, а
@@ -2900,7 +2893,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
-     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayBanner','holidayBannerText','eventList','emptyState','emptyStateText','emptyResetBtn',
+     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayBanner','holidayBannerText','eventList','emptyState','emptyStateText',
      'noteBlock','noteBody','noteEdit','noteInput','noteDeleteEdit','noteDone'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
@@ -4331,17 +4324,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var вДне = filters.date
         ? events.some(function(e){ return e.dateKey === filters.date; })
         : true;
-      var поправимо = вДне;
       el.emptyStateText.textContent = !вДне
         ? 'В этот день занятий нет'
         : (filters.date
             ? 'В этот день нет занятий по выбранным фильтрам'
             : 'Ничего не найдено по выбранным фильтрам');
-      // Кнопка появляется, только когда отбор и есть причина пустоты. В дне,
-      // где занятий нет вовсе, снятие фильтров ничего не покажет, а кнопка
-      // обещала бы обратное; вернуться к полному списку человек может
-      // крестиком в чипе даты, он стоит прямо над этим местом.
-      el.emptyResetBtn.style.display = поправимо ? '' : 'none';
       return;
     }
 
@@ -4913,7 +4900,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       renderAll();
     }
     el.resetFilters.addEventListener('click', resetAll);
-    el.emptyResetBtn.addEventListener('click', resetAll);
     // Делегирование: чип сброса пересоздаётся при каждой перерисовке, а сам
     // список — нет.
     // Конец ухода: класс снимается, панель перестаёт рисоваться. Имя
