@@ -85,7 +85,10 @@
      будет готово. */
   if(navigator.serviceWorker){
     navigator.serviceWorker.addEventListener('message', function(e){
-      if(e && e.data && e.data.type === 'build-updated') window.__buildUpdated = true;
+      if(!e || !e.data || e.data.type !== 'build-updated') return;
+      // Номер сборки нужен окну обновления. Его может не быть — тогда
+      // запоминаем сам факт, и окно покажется без номера в заголовке.
+      window.__buildUpdated = e.data.version || true;
     });
   }
 
@@ -6923,13 +6926,26 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      docs/синхронизация-для-интерфейса.md. Здесь остаётся то, что под капотом:
      приём сообщения, защита от повторов и запись в журнал. */
   var сборкаОбъявлена = false;
+  /* Номер сборки, о которой уже сказали. Отсюда его берёт окно обновления:
+     показывать надо пришедшую версию, а не ту, на которой человек работает.
 
-  function announceNewBuild(){
-    // Сообщение приходит на каждый фоновый запрос, который принёс свежий файл,
-    // — а их за сессию бывает несколько. Человеку это говорится один раз.
-    if(сборкаОбъявлена) return;
+     null означает «сборка есть, а номера не прислали» — такое бывает, если
+     service worker не смог вычитать APP_VERSION из скачанного файла. Окно в
+     этом случае обходится без скобок в заголовке. */
+  var пришедшаяСборка = null;
+
+  function announceNewBuild(версия){
+    var номер = версия || null;
+    /* Одно и то же сообщение приходит по нескольку раз за сессию — на каждый
+       фоновый запрос, принёсший свежий файл. О нём говорится один раз.
+
+       А вот следующая сборка — уже другое дело: пока человек не перезапустился,
+       наверх может выйти ещё одна версия, и заголовок открытого окна обязан
+       показать её. Поэтому повтор разрешён ровно тогда, когда сменился номер. */
+    if(сборкаОбъявлена && номер === пришедшаяСборка) return;
     сборкаОбъявлена = true;
-    logEvent('app', 'new build available');
+    пришедшаяСборка = номер;
+    logEvent('app', 'new build available', номер ? { version: номер } : undefined);
     // Уезжает сразу: по этой записи видно, что человек увидел просьбу
     // перезапуститься, и дальше по журналу — послушался ли он.
     scheduleLogSync();
@@ -7053,11 +7069,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function listenForNewBuild(){
     if(!('serviceWorker' in navigator) || !navigator.serviceWorker) return;
     navigator.serviceWorker.addEventListener('message', function(e){
-      if(e && e.data && e.data.type === 'build-updated') announceNewBuild();
+      if(e && e.data && e.data.type === 'build-updated') announceNewBuild(e.data.version);
     });
-    // Сообщение могло прийти, пока приложение готовилось: его поймал слушатель
-    // из шапки файла и оставил отметку.
-    if(window.__buildUpdated) announceNewBuild();
+    /* Сообщение могло прийти, пока приложение готовилось: его поймал слушатель
+       из шапки файла и оставил отметку. В ней либо номер сборки, либо просто
+       true — тогда номера не было. */
+    if(window.__buildUpdated){
+      announceNewBuild(typeof window.__buildUpdated === 'string' ? window.__buildUpdated : null);
+    }
   }
 
   // Обычно скрипт лежит в конце body и DOMContentLoaded ещё впереди. Но
