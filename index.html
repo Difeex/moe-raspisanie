@@ -736,7 +736,20 @@
     font-size:12.5px;font-weight:700;line-height:1;color:var(--text-muted);
     white-space:nowrap;letter-spacing:.02em;
     background:rgba(31,41,55,0.05);border-radius:9px;padding:6px 12px;
+    font-family:inherit;border:none;
+    transition:background .12s ease, color .12s ease;
   }
+  /* Пока день не выбран, снимать нечего: кнопка выключена и ведёт себя как
+     обычная пометка — ни курсора, ни отклика, ни места в обходе по Tab. */
+  .divider-count:disabled{cursor:default}
+  .divider-count:not(:disabled){cursor:pointer}
+  /* Отклик тот же, что у чипов дня: счётчик стоит с ними в одной черте и
+     снимает тот же самый отбор по дате. Внутри @media (hover:hover)
+     обязательно — иначе на сенсорном экране подсветка залипает после касания. */
+  @media (hover:hover){
+    .divider-count:not(:disabled):hover{background:var(--mode);color:#fff}
+  }
+  .divider-count:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* Без счётчика черта ведёт себя как прежде: сплошная линия нулевой высоты,
      с полями 6px, которые вместе с 14px промежутка панели дают привычные 20px
      воздуха с обеих сторон. Со счётчиком поля не нужны — высоту задаёт сам
@@ -2046,7 +2059,11 @@
             stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
         </button>
         <span class="divider-line"></span>
-        <span class="divider-count" id="listCount"></span>
+        <!-- Счётчик нажимается, когда выбран день: нажатие снимает отбор по
+             дате, не трогая остальные условия. Это button, а не span, чтобы он
+             брался фокусом и нажимался с клавиатуры; пока день не выбран,
+             кнопка выключена и ведёт себя как обычная пометка. -->
+        <button class="divider-count" id="listCount" type="button" disabled></button>
         <span class="divider-tail"></span>
       </div>
       <!-- Заметка к дню — под чертой, вместе с тем, что она называет.
@@ -4118,6 +4135,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       text = getFilteredEvents().length + ' из ' + total;
     }
     el.listCount.textContent = text;
+    // Нажимается счётчик только когда есть что снимать. Без выбранного дня
+    // нажатие ничего бы не изменило, а кнопка, которая ничего не делает, —
+    // обещание, которое интерфейс не держит.
+    el.listCount.disabled = !hasDate;
+    el.listCount.title = hasDate ? 'Показать все дни, не снимая фильтров' : '';
     el.listDivider.classList.toggle('has-count', !!text);
   }
 
@@ -4632,6 +4654,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       requestAnimationFrame(updateMonthLabel);
     });
     el.dateChip.addEventListener('click', function(){ filters.date = null; renderAll(); });
+    // Счётчик снимает ровно тот же отбор по дате и ничего больше: виды работ,
+    // формат, потоки и поиск остаются как были, список возвращается к тому,
+    // что отобрано полосой сверху.
+    el.listCount.addEventListener('click', function(){ filters.date = null; renderAll(); });
 
     el.eventList.addEventListener('click', function(e){
       var typeIcon = e.target.closest('.type-icon');
