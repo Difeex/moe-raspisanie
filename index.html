@@ -953,26 +953,23 @@
   }
   .divider-holiday:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-  /* Порог свёртывания — по ширине самой черты, а не окна, и вот почему.
-     Узкое место не телефон, а десктоп у самой границы 842px: там список сжат
-     календарём до 393px, тогда как на телефоне 360px панель занимает 332px и
-     ниже 842px раскладка вообще становится одноколоночной. Одним медиазапросом
-     эти два случая не выразить — нужен контейнерный запрос.
+  /* Свёрнутый вид тега: один значок вместо значка с подписью, 32px вместо 107.
+     Класс вешает подогнатьТегПраздника() — тег решает по замеру, остаётся ли
+     линии между ним и счётчиком не меньше 14px.
 
-     Замерено: постоянная часть черты — хвосты 2×14, чип даты 127 (самая длинная
-     подпись, «Чт, 31 декабря»), тег 107, счётчик 89 и промежутки 5×8 — всего
-     391px. При 392px линии между врезками остаётся 1px, при 372 врезки лезут
-     друг на друга. Порог взят 420px: там от линии остаётся 28px и черта ещё
-     читается чертой. Свёрнутый тег занимает 32px вместо 107.
+     Раньше на этом месте стоял контейнерный запрос: черта объявлялась
+     контейнером, и подпись пряталась, когда сама черта уже 419px. Порог
+     считался по самой длинной подписи даты, «Чт, 31 декабря», — но подписи
+     гуляют сильно: «Ср, 9 мая» занимает 94px, «Пн, 23 февраля» — 132px,
+     разница 38px. Ширину счётчика двигает ещё и число занятий. Поэтому любой
+     единственный порог либо прячет подпись там, где она помещалась (на 842px с
+     «Ср, 4 ноября» линии оставался 21px, а тег всё равно сворачивался), либо
+     оставляет её там, где линии уже не осталось. Замер снимает оба случая.
 
-     Контейнер объявлен на самой черте, а не на панели: ширина у них одна и та
-     же (у черты поля -15px, ровно на отступ панели и её рамку), а внутри черты
-     нет ничего, чему могло бы помешать ограничение раскладки. */
-  .panel-divider{container-type:inline-size}
-  @container (max-width:419px){
-    .divider-holiday{padding:6px 9px}
-    .divider-holiday-label{display:none}
-  }
+     Вместе с запросом снято и container-type с черты: контейнерных правил на
+     ней больше нет, а ограничение раскладки даром не берут. */
+  .divider-holiday.compact{padding:6px 9px}
+  .divider-holiday.compact .divider-holiday-label{display:none}
 
   /* Счётчик сидит на своей подложке, а не просто висит в разрыве линии: так
      он читается как отдельная пометка на панели, а не как обрывок черты.
@@ -2447,7 +2444,7 @@
           <svg viewBox="3.5 2.5 18.3 18.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5L9.8 7.8l6.4 6.4z"/><path d="M13.4 6.4V4.2M16.8 8l1.6-1.6M18.6 11.2h2.2"/></svg>
           <span class="divider-holiday-label">Праздник</span>
         </button>
-        <span class="divider-line"></span>
+        <span class="divider-line" id="dividerLine"></span>
         <!-- Счётчик нажимается, когда выбран день: нажатие снимает отбор по
              дате, не трогая остальные условия. Это button, а не span, чтобы он
              брался фокусом и нажимался с клавиатуры; пока день не выбран,
@@ -3100,7 +3097,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
-     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayChip','holidayOverlay','holidayDate','holidayMessage','holidayOkBtn','eventList','emptyState','emptyStateText',
+     'dateChip','dateChipLabel','listDivider','dividerLine','listCount','listCountLabel','holidayChip','holidayOverlay','holidayDate','holidayMessage','holidayOkBtn','eventList','emptyState','emptyStateText',
      'noteBlock','noteBody','noteEdit','noteInput','noteDeleteEdit','noteDone'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
@@ -4629,6 +4626,29 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.listCount.disabled = !hasDate;
     el.listCount.title = hasDate ? 'Показать все дни, не снимая фильтров' : '';
     el.listDivider.classList.toggle('has-count', !!text);
+    подогнатьТегПраздника();
+  }
+
+  // Тег праздника решает сам, влезает ли он с подписью. Черта — ряд врезок с
+  // тянущейся линией посередине: хвост, чип даты, тег, линия, счётчик, хвост.
+  // Место под подпись есть ровно тогда, когда линии остаётся не меньше 14px —
+  // столько же, сколько занимают хвосты по краям черты. Меньше — линия
+  // перестаёт читаться линией и превращается в чёрточку между двумя пометками.
+  //
+  // Замер делается в развёрнутом состоянии. У свёрнутого тега подпись выключена,
+  // и по нему не понять, поместится ли она обратно, — поэтому класс сначала
+  // снимается, потом меряется линия, и по итогу класс возвращается или нет.
+  // Всё в одном проходе, до отрисовки кадра: мигания не видно.
+  var МИН_ЛИНИЯ_ЧЕРТЫ = 14;
+  function подогнатьТегПраздника(){
+    // У скрытого замер даёт нули: коробки нет, линия «шириной 0», и тег
+    // свернулся бы ни за что, а развернулся бы только к следующей перерисовке.
+    if(el.holidayChip.style.display === 'none') return;
+    if(!el.listDivider.classList.contains('visible')) return;
+    el.holidayChip.classList.remove('compact');
+    if(el.dividerLine.getBoundingClientRect().width < МИН_ЛИНИЯ_ЧЕРТЫ){
+      el.holidayChip.classList.add('compact');
+    }
   }
 
 
@@ -5169,6 +5189,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     window.addEventListener('resize', function(){
       requestAnimationFrame(updateMonthLabel);
     });
+    // Ширина черты меняется вместе с окном, а вместе с ней — место под подпись
+    // тега праздника. Список при ресайзе не перерисовывается, поэтому замер,
+    // как и подпись месяца, нужно повторять отдельно.
+    window.addEventListener('resize', function(){
+      requestAnimationFrame(подогнатьТегПраздника);
+    });
+    // Пока не доехал вшитый шрифт, врезки меряются шрифтом системы, и ширины у
+    // них другие. Одна перепроверка после загрузки шрифтов приводит тег к тому
+    // виду, который он принял бы при верном замере.
+    if(document.fonts && document.fonts.ready && document.fonts.ready.then){
+      document.fonts.ready.then(подогнатьТегПраздника);
+    }
     el.dateChip.addEventListener('click', function(){ filters.date = null; renderAll(); });
     // Счётчик снимает ровно тот же отбор по дате и ничего больше: виды работ,
     // формат, потоки и поиск остаются как были, список возвращается к тому,
