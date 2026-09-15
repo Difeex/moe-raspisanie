@@ -355,6 +355,10 @@
   .btn-primary{background:linear-gradient(135deg,var(--lecture),#5b8be8);color:#fff;border:none;box-shadow:0 8px 20px rgba(59,111,214,0.32)}
   .btn-ghost{background:transparent;border:1px solid var(--border-soft);color:var(--text-muted)}
   .btn-sm{padding:7px 14px;font-size:13px}
+  /* Вдвое шире обычной кнопки. Ширина берётся полями, а не min-width: подпись
+     тут короткая («ОК»), и при заданной ширине она стояла бы в озере пустоты не
+     по центру, а как придётся, — поля же растят кнопку симметрично от текста. */
+  .btn-wide{padding-left:44px;padding-right:44px}
   .icon-btn{
     width:38px;height:38px;border-radius:12px;border:1px solid var(--border-soft);
     background:var(--surface-strong);display:flex;align-items:center;justify-content:center;
@@ -2183,10 +2187,12 @@
      ничего не делает само. -->
 <div class="confirm-overlay" id="buildOverlay">
   <div class="confirm-card glass">
-    <h3>Вышла новая версия</h3>
-    <p>Перезапустите приложение на своём устройстве, чтобы она заработала.</p>
+    <h3>Вышла новая версия <span id="buildVersion"></span></h3>
+    <p>Пожалуйста, перезапустите приложение на своём устройстве. Необходимо
+      полностью закрыть его и запустить заново.<br>Все ваши данные будут
+      сохранены после перезапуска.</p>
     <div class="confirm-actions">
-      <button class="btn btn-primary" id="buildOkBtn" type="button">ОК</button>
+      <button class="btn btn-primary btn-wide" id="buildOkBtn" type="button">ОК</button>
     </div>
   </div>
 </div>
@@ -2705,7 +2711,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   function collectDom(){
     ['app','uploadBtn','fileInput','fileInputInline','dropzone','noDataCard','uploadError','uploadErrorText','clearDataBtn',
      'loadNotice','loadNoticeText','loadNoticeList','loadNoticeBody','loadNoticeClose','loadNoticeChevron','uploadErrorClose',
-     'buildOverlay','buildOkBtn','confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
+     'buildOverlay','buildOkBtn','buildVersion','confirmOverlay','confirmCancelBtn','confirmOkBtn','confirmTitle','confirmText',
      'lockOverlay','lockForm','lockInput','lockError','lockSubmit','logoutBtn',
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
@@ -4738,6 +4744,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     el.clearDataBtn.addEventListener('click', askClearData);
     el.buildOkBtn.addEventListener('click', function(){
       el.buildOverlay.classList.remove('open');
+      гаситьФонОкна(false);
       // По этой паре записей видно, дошла ли просьба до человека: «available»
       // пишет announceNewBuild, «acknowledged» — то, что окно закрыли.
       logEvent('app', 'new build acknowledged');
@@ -4787,9 +4794,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       flushOnOnline();
     });
     document.addEventListener('keydown', function(e){
+      /* Пока открыто окно обновления, из него нет выхода кроме кнопки: ни
+         Escape, ни обход по Tab. Основную работу делает inert, но он есть не
+         во всех браузерах, и без этой подстраховки там фокус ушёл бы за
+         подложку. Сравнение идёт до всего остального — Escape не должен
+         закрывать и диалог, который лежит под окном. */
+      if(el.buildOverlay.classList.contains('open')){
+        if(e.key === 'Escape' || e.key === 'Tab'){
+          e.preventDefault();
+          el.buildOkBtn.focus();
+        }
+        return;
+      }
       if(e.key !== 'Escape') return;
       if(el.confirmOverlay.classList.contains('open')) closeConfirm();
       closeStreamMenu();
+    });
+    /* Фокус мог уйти мимо клавиатуры — например, нажатием по элементу, до
+       которого inert не дотянулся. Возвращаем его в окно. */
+    document.addEventListener('focusin', function(e){
+      if(!el.buildOverlay.classList.contains('open')) return;
+      if(el.buildOverlay.contains(e.target)) return;
+      el.buildOkBtn.focus();
     });
   }
 
@@ -6925,10 +6951,49 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return;
     }
     ждётОкноСборки = false;
+
+    /* Номер сборки в заголовке. Показывается та, на которой человек работает
+       прямо сейчас, — другой у приложения и нет: service worker сравнивает
+       метки версии файла (etag, last-modified) и присылает голое
+       «build-updated», без номера. Чтобы в скобках стояла пришедшая версия,
+       её должен прислать сам sw.js, вычитав APP_VERSION из скачанного файла;
+       это правка инфраструктурной линии.
+
+       Преграды там две, и вторая не менее важна: announceNewBuild говорит один
+       раз за сессию и второе сообщение глотает. Значит даже с номером в
+       сообщении заголовок не обновился бы на более свежую сборку, пришедшую
+       следом, — сначала нужно разрешить повтор, когда номер изменился.
+
+       Когда и то и другое появится, здесь меняется одна строка: номер берётся
+       из сообщения вместо APP_VERSION. Заголовок переписывается при каждом
+       показе, так что обновится и на уже открытом окне. */
+    el.buildVersion.textContent = '(' + APP_VERSION + ')';
+
     el.buildOverlay.classList.add('open');
-    // Окно блокирующее, и уйти из него можно только кнопкой — значит с
-    // клавиатуры она должна быть под рукой сразу.
+
+    /* Окно блокирующее по-настоящему: пока оно открыто, до приложения нельзя
+       дотянуться ни мышью, ни клавиатурой. Подложка перекрывает нажатия сама,
+       но обходом по Tab фокус уходил бы за неё — на чипы, кнопки шапки, поле
+       поиска, — и человек мог бы нажать что угодно, не видя, что нажимает.
+
+       inert выключает целую ветку разом: ни фокуса, ни нажатий, ни поиска по
+       странице. Диалог подтверждения и форма входа гасятся вместе с
+       приложением — окно обновления поверх всего. */
+    гаситьФонОкна(true);
+
+    // Единственная живая цель на экране — она же и выход отсюда.
     el.buildOkBtn.focus();
+  }
+
+  /* Ветки, которые выключаются под окном обновления. Форма входа сюда входит
+     на случай, когда человек вышел из учётной записи, не закрыв окно. */
+  function гаситьФонОкна(гасить){
+    ['.app', '#confirmOverlay', '#lockOverlay'].forEach(function(сел){
+      var узел = document.querySelector(сел);
+      if(!узел) return;
+      if(гасить) узел.setAttribute('inert', '');
+      else узел.removeAttribute('inert');
+    });
   }
 
   function показатьОтложенноеОкноСборки(){
