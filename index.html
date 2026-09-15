@@ -157,6 +157,12 @@
        «Сегодня», ячейки дня, чипы фильтров, «+ Поток», поле поиска,
        «Сбросить», кнопки шапки, метки потока на карточках, поле пароля. */
     --border-soft:rgba(31,41,55,0.16);
+    /* Черты — не рамки, и темнеть вместе с ними не должны. Рамка очерчивает
+       предмет размером с палец, черта тянется во всю ширину панели: при одной
+       и той же плотности длинная линия весит на глаз в разы больше и начинает
+       делить панель надвое вместо того, чтобы отделять управление от списка.
+       Поэтому у черт своя переменная, оставленная на прежних 0.08. */
+    --line-soft:rgba(31,41,55,0.08);
     --border-hover:rgba(31,41,55,0.30);
     /* Today is outlined in a softened accent so it reads as a marker rather
        than as a selection; hover deepens it to the full accent. */
@@ -743,7 +749,7 @@
      Тень внешняя, а не inset: при нулевой высоте внутрь класть её некуда. */
   .divider-line,
   .divider-tail{
-    height:0;border-top:1px solid var(--border-soft);
+    height:0;border-top:1px solid var(--line-soft);
     box-shadow:0 1px 0 var(--border);
   }
   .divider-line{flex:1}
@@ -1041,7 +1047,7 @@
      поля по вертикали выводят её за внутренний отступ панели (12px) и за её
      рамку (1px) — отсюда 13. */
   .sf-divider{
-    width:1px;align-self:stretch;flex:none;background:var(--border-soft);
+    width:1px;align-self:stretch;flex:none;background:var(--line-soft);
     margin:-13px 0 -13px 12px;
     /* Та же фаска, что у горизонтальной черты в календаре: светлая линия встык
        справа, цветом обводки панели. Тень, а не второй элемент — она повторяет
@@ -1552,7 +1558,7 @@
   .tag.dim{opacity:.4}
   /* Matches the selected stream chip in the filter row. */
   .tag.stream-tag.active{background:var(--mode);color:#fff;border-color:transparent}
-  .event-detail{display:none;flex-direction:column;gap:4px;font-size:12.5px;color:var(--text-muted);padding-top:4px;border-top:1px dashed var(--border-soft);margin-top:2px}
+  .event-detail{display:none;flex-direction:column;gap:4px;font-size:12.5px;color:var(--text-muted);padding-top:4px;border-top:1px dashed var(--line-soft);margin-top:2px}
   .event-card.expanded .event-detail{display:flex}
   .event-detail .detail-warn{color:var(--warn-text)}
 
