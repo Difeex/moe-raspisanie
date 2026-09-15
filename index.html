@@ -737,8 +737,16 @@
     white-space:nowrap;letter-spacing:.02em;
     background:rgba(31,41,55,0.05);border-radius:9px;padding:6px 12px;
     font-family:inherit;border:none;
+    /* Выкладка та же, что у чипа даты: подпись и крестик в строку, зазор 7px.
+       Считать его надо вместе с пустотой внутри рисунка — от букв до видимого
+       креста выходит около 8px. */
+    display:inline-flex;align-items:center;gap:7px;
     transition:background .12s ease, color .12s ease;
   }
+  /* Крестик появляется только вместе с возможностью нажать. Выключенный
+     счётчик — просто пометка о том, сколько занятий показано, и крест на ней
+     обещал бы действие, которого нет. */
+  .divider-count:disabled .divider-date-x{display:none}
   /* Пока день не выбран, снимать нечего: кнопка выключена и ведёт себя как
      обычная пометка — ни курсора, ни отклика, ни места в обходе по Tab. */
   .divider-count:disabled{cursor:default}
@@ -747,12 +755,17 @@
      одного действия в одной черте, и приглушённый тон делал правую половину
      менее заметной, чем левая. Выключенный счётчик остаётся --text-muted:
      тогда он просто пометка, и выделять его незачем. */
-  .divider-count:not(:disabled){cursor:pointer;color:var(--text)}
+  /* Справа поле убавлено до 8px — как у чипа даты и по той же причине: там
+     стоит крест со своей пустотой внутри рисунка, и при поле в 12px он казался
+     отставленным от края сильнее, чем подпись слева. Без креста, у выключенной
+     кнопки, поля остаются одинаковыми. */
+  .divider-count:not(:disabled){cursor:pointer;color:var(--text);padding-right:8px}
   /* Отклик тот же, что у чипов дня: счётчик стоит с ними в одной черте и
      снимает тот же самый отбор по дате. Внутри @media (hover:hover)
      обязательно — иначе на сенсорном экране подсветка залипает после касания. */
   @media (hover:hover){
     .divider-count:not(:disabled):hover{background:var(--mode);color:#fff}
+    .divider-count:not(:disabled):hover .divider-date-x{color:rgba(255,255,255,0.75)}
   }
   .divider-count:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* Без счётчика черта ведёт себя как прежде: сплошная линия нулевой высоты,
@@ -2068,7 +2081,15 @@
              дате, не трогая остальные условия. Это button, а не span, чтобы он
              брался фокусом и нажимался с клавиатуры; пока день не выбран,
              кнопка выключена и ведёт себя как обычная пометка. -->
-        <button class="divider-count" id="listCount" type="button" disabled></button>
+        <button class="divider-count" id="listCount" type="button" disabled>
+          <span id="listCountLabel"></span>
+          <!-- Крестик тот же, что в чипе выбранного дня: и класс, и рисунок, и
+               обрезанный по кресту viewBox. Оба снимают один и тот же отбор по
+               дате, и выглядеть они обязаны одинаково. Показывается только
+               когда кнопка включена — см. правило .divider-count:disabled. -->
+          <span class="divider-date-x"><svg viewBox="4 4 16 16" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+        </button>
         <span class="divider-tail"></span>
       </div>
       <!-- Заметка к дню — под чертой, вместе с тем, что она называет.
@@ -2668,7 +2689,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      'dataStatus','calendarCol','prevMonth','nextMonth','todayBtn','monthLabel','calendarGrid','legend',
      'filterBar','workTypeFilters','modeFilters','streamFilters','streamMenu','streamMenuScroll','searchInput','resetFilters',
      'scrollFilters','scrollFiltersList','scrollFiltersTop','listPanel',
-     'dateChip','dateChipLabel','listDivider','listCount','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn',
+     'dateChip','dateChipLabel','listDivider','listCount','listCountLabel','holidayBanner','holidayBannerText','eventList','emptyState','emptyResetBtn',
      'noteBlock','noteBody','noteEdit','noteInput','noteDeleteEdit','noteDone'
     ].forEach(function(id){ el[id] = document.getElementById(id); });
   }
@@ -4139,7 +4160,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // формулировки, и глазу не приходится разбирать, какая из них сейчас.
       text = getFilteredEvents().length + ' из ' + total;
     }
-    el.listCount.textContent = text;
+    el.listCountLabel.textContent = text;
     // Нажимается счётчик только когда есть что снимать. Без выбранного дня
     // нажатие ничего бы не изменило, а кнопка, которая ничего не делает, —
     // обещание, которое интерфейс не держит.
