@@ -181,6 +181,15 @@
     --exam:#dd8a2e;
     --exam-soft:rgba(221,138,46,0.16);
     --exam-line:rgba(221,138,46,0.48);
+    /* День, в котором нашлось занятие по действующему фильтру. Тон взят от
+       зачёта — это единственный тёплый цвет в календаре, и на холодной сетке
+       из синего и зелёного он читается как «здесь искомое», не сливаясь ни с
+       одним видом занятий. Прозрачности подобраны по показу: кольцо заметно,
+       но не звонко, заливка — намёк, а не заливка в полном смысле. */
+    --match-line:rgba(221,138,46,0.32);
+    --match-fill:rgba(221,138,46,0.07);
+    --match-line-hover:rgba(221,138,46,0.62);
+    --match-fill-hover:rgba(221,138,46,0.14);
     /* Маджента, а не прежний фиолетовый #8a7bc7: тот сидел вплотную к цветам,
        которые примерялись форматам, и «Другое» с «Онлайном» сливались в один
        тон. Ниша между синим лекции и красным праздника при этом остаётся
@@ -641,6 +650,34 @@
   .day-cell.no-lessons{box-shadow:none}
   @media (hover:hover){
     .day-cell.no-lessons:hover{box-shadow:0 14px 28px rgba(31,41,55,0.18)}
+  }
+  /* День, где под действующий фильтр попало хотя бы одно занятие. Прежде на
+     фильтры откликались только полоски: подходящие оставались в цвете,
+     остальные гасли. Полоска толщиной в несколько пикселей — слишком мелкий
+     ответ на вопрос «в какие дни это есть»: приходилось читать календарь
+     по клеточкам вместо того, чтобы увидеть ответ сразу.
+
+     Класс ставится только когда включён хотя бы один фильтр, кроме даты. Без
+     фильтров подходит всё, и отметить пришлось бы каждый день с занятиями —
+     признак, который стоит всегда, не значит ничего.
+
+     Сегодняшний и выбранный дни исключены: у них свои заливки, и спорить за
+     одну плитку двум признакам незачем. Полоски занятий не трогаются вовсе —
+     они отвечают на другой вопрос, какие именно занятия в этот день. */
+  .day-cell.has-matches:not(.selected):not(.is-today){
+    background:var(--match-fill);
+    box-shadow:inset 0 0 0 2px var(--match-line);
+  }
+  /* Своё наведение здесь обязательно: правило выше специфичнее общего
+     .day-cell:hover, и без этого плитка с находками под курсором не менялась
+     бы вовсе. Мера отклика та же, что у обычных плиток, — кольцо темнеет
+     примерно вдвое. Подъём и тень приходят от общего правила. */
+  @media (hover:hover){
+    .day-cell.has-matches:not(.selected):not(.is-today):hover{
+      background:var(--match-fill-hover);
+      box-shadow:inset 0 0 0 2px var(--match-line-hover),
+                 0 14px 28px rgba(31,41,55,0.18);
+    }
   }
   .day-cell.empty-day{visibility:hidden;cursor:default}
   .day-cell.no-events .num{color:var(--text-faint)}
@@ -3631,11 +3668,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(add) add.classList.remove('menu-open');
   }
 
+  // Отбор — это всё, кроме даты: вид работ, формат, поток, строка поиска.
+  // Ровно эти условия проверяет passesNonDateFilters, и ровно по ним календарь
+  // решает, нашлось ли что-нибудь в дне.
+  function отборВключён(){
+    return !!(filters.workTypes.size || filters.modes.size ||
+              filters.streams.size || filters.search.trim());
+  }
+
   // Действует ли хоть один фильтр. Дата считается наравне с остальными: её
   // снимает та же кнопка «Сбросить».
   function фильтрыДействуют(){
-    return !!(filters.date || filters.workTypes.size || filters.modes.size ||
-              filters.streams.size || filters.search.trim());
+    return !!filters.date || отборВключён();
   }
 
   function updateFilterBarActiveStates(){
@@ -3755,6 +3799,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       if(ok) d.matching++;
     });
     var todayKey = formatDateKeyLocal(new Date());
+    // Считается один раз на всю отрисовку, а не на каждый день месяца.
+    var отбор = отборВключён();
 
     for(var day=1; day<=total; day++){
       var dateKey = viewMonth.year+'-'+pad2(viewMonth.monthIndex+1)+'-'+pad2(day);
@@ -3767,6 +3813,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // Filtered out: lessons exist but none match — only the number dims.
       // Counted over all lessons, not just the five strips that fit.
       if(!dayData || !dayData.matching) cell.classList.add('no-events');
+      // Нашлось по действующему отбору — см. .has-matches. Без отбора метки
+      // нет: подходит всё, и помечать было бы нечего.
+      else if(отбор) cell.classList.add('has-matches');
       if(dateKey===todayKey) cell.classList.add('is-today');
       if(filters.date===dateKey) cell.classList.add('selected');
       // Уголок заметки — как и рамка, признак самого дня, а не результата
