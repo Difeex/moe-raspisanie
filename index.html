@@ -4611,9 +4611,33 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   }
 
   // ---------- list ----------
+  // Раскрытые карточки переживают перерисовку списка, но только пока остаются
+  // на экране.
+  //
+  // Список собирается заново при любой мелочи: включили фильтр, сняли, выбрали
+  // день, набрали что-то в поиске. Раскрытая карточка при этом схлопывалась,
+  // даже если сама никуда не делась, — человек её только что развернул, а она
+  // закрылась у него на глазах.
+  //
+  // Теперь помним ключи раскрытых карточек и восстанавливаем их при сборке. А
+  // после сборки чистим память: ключи, которых в новом списке не оказалось,
+  // забываются. Значит карточка, уехавшая из списка (фильтр её отсеял, день
+  // сменился), вернётся свёрнутой — как и просил владелец.
+  //
+  // Ключ собирается из полей самого занятия: своего идентификатора у записей
+  // выгрузки нет. Вид работы в ключе обязателен: в выгрузке встречаются пары,
+  // отличающиеся только им, — лекция и зачёт в одном слоте одной дисциплины.
+  var раскрытыеКарточки = new Set();
+  function ключЗанятия(e){
+    return [e.dateKey, e.start, e.end, e.workTypeText, e.discipline, e.room || '',
+            e.streamRaw || ''].join('|');
+  }
+
   function buildCard(e){
     var card = document.createElement('div');
     card.className = 'event-card glass';
+    card.dataset.ключ = ключЗанятия(e);
+    if(раскрытыеКарточки.has(card.dataset.ключ)) card.classList.add('expanded');
     card.style.setProperty('--card-color', WORK_META[e.workTypeBucket].color);
 
     var typeActive = !filters.workTypes.size || filters.workTypes.has(e.workTypeBucket);
@@ -4735,9 +4759,19 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(!events.length){
       el.eventList.style.display = 'none';
       el.emptyState.style.display = 'none';
+      // Расписания нет вовсе — помнить раскрытые карточки не о чем.
+      раскрытыеКарточки.clear();
       return;
     }
     var filtered = getFilteredEvents();
+    // Забываем раскрытые карточки, которых в новом списке не будет. Считается
+    // по самому списку, а не по разметке: разметка на этом шаге ещё прежняя, а
+    // при пустом списке её и вовсе не тронут — рано выйдем. Одно место на все
+    // случаи: фильтры, выбор дня, поиск, пустой список.
+    var наЭкране = new Set(filtered.map(ключЗанятия));
+    раскрытыеКарточки.forEach(function(к){
+      if(!наЭкране.has(к)) раскрытыеКарточки.delete(к);
+    });
     el.eventList.innerHTML = '';
     el.eventList.style.display = filtered.length ? 'flex' : 'none';
     el.emptyState.style.display = filtered.length ? 'none' : 'flex';
@@ -4810,6 +4844,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       groupEl.appendChild(cardsWrap);
       el.eventList.appendChild(groupEl);
     });
+
   }
 
   // ---------- top-level render ----------
@@ -5500,7 +5535,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var streamTag = e.target.closest('.stream-tag');
       if(streamTag){ e.stopPropagation(); toggleFilter('streams', streamTag.dataset.stream); return; }
       var card = e.target.closest('.event-card');
-      if(card) card.classList.toggle('expanded');
+      if(card){
+        var раскрыта = card.classList.toggle('expanded');
+        if(раскрыта) раскрытыеКарточки.add(card.dataset.ключ);
+        else раскрытыеКарточки.delete(card.dataset.ключ);
+      }
     });
 
     // Node.contains бросает исключение, если ему передать не узел, а исключение
