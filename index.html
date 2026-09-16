@@ -4815,13 +4815,33 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // The month on screen is moved only by the user — the arrows, «Сегодня», or
   // loading a file. Nothing here ever repositions the calendar as a side
   // effect: filtering only changes which strips the visible month shows.
+  // Прокрутка не должна меняться сама по себе.
+  //
+  // Когда список укорачивается (выбрали день), прокрутка, стоявшая ниже новой
+  // высоты, становится невозможной, и браузер прижимает её к новому пределу.
+  // Прежнее положение он при этом запоминает как «желаемое» — и возвращает
+  // его, как только страница вырастает обратно. Получается так: сняли день,
+  // список вернулся во всю длину, и человека уносит на тысячи пикселей вниз,
+  // туда, где он был несколько нажатий назад и куда не просил.
+  //
+  // Лечится явной прокруткой: она отменяет запомненное браузером. Поэтому
+  // после каждой перерисовки положение задаётся руками — ровно то, которое
+  // человек видит, с поправкой на новый предел. Если страница не менялась в
+  // высоте, значение совпадает с текущим и ничего не происходит.
+  //
+  // Правила, которые двигают страницу нарочно, — revealListOnNarrow и
+  // выправитьПрокрутку — вызываются после renderAll и перебивают это.
   function renderAll(){
+    var прокрутка = window.pageYOffset;
     renderCalendar();
     renderList();
     renderNote();
     renderStreamFilters();
     updateFilterBarActiveStates();
     updateListDivider();
+    var предел = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    var цель = Math.min(прокрутка, предел);
+    if(Math.abs(window.pageYOffset - цель) > 0.5) window.scrollTo(0, цель);
   }
 
   // Черта имеет смысл, только когда ей есть что отделять сверху. В пустом
