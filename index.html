@@ -880,6 +880,17 @@
      выше `.day-cell.selected .num`, которое возвращает белое число выбранному
      дню. Порядок этих трёх строк — не случайность, менять его нельзя. */
   .day-cell.is-today .num{color:var(--accent)}
+  /* Под курсором число сегодняшнего дня тоже остаётся синим. Без этого правила
+     его перекрывало общее `.day-cell:not(.selected):hover .num`, которое
+     темнит числа всех плиток, — и сегодняшний день терял единственный свой
+     признак ровно в тот миг, когда на него наводят. Та же ловушка была у чипа
+     дня в списке, и лечится она так же.
+
+     `:not(.selected)` обязателен: у выбранного дня число белое поверх тёмной
+     плитки, и синим ему становиться нельзя — это уже чинили однажды. */
+  @media (hover:hover){
+    .day-cell.is-today:not(.selected):hover .num{color:var(--accent)}
+  }
   .day-cell.selected{background:var(--mode);box-shadow:0 8px 20px rgba(36,52,71,0.35)}
   @media (hover:hover){
     .day-cell.selected:hover{background:var(--mode);box-shadow:0 16px 32px rgba(36,52,71,0.42)}
