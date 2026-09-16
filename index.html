@@ -4319,9 +4319,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       (function(dk){
         cell.addEventListener('click', function(){
           var wasSelected = (filters.date === dk);
+          // Замер до перерисовки: после неё страница уже другой высоты, и
+          // прежнее положение прокрутки не узнать.
+          var былаПрокрутка = window.pageYOffset;
           filters.date = wasSelected ? null : dk;
           renderAll();
-          if(!wasSelected) revealListOnNarrow();
+          if(!wasSelected){
+            revealListOnNarrow();
+            выправитьПрокрутку(былаПрокрутка, false);
+          }
         });
       })(dateKey);
 
@@ -4785,11 +4791,15 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
                месяц переключает.
 
                Прокрутки к списку здесь нет намеренно: человек уже в списке,
-               и дёргать страницу к его началу незачем. */
+               и дёргать страницу к его началу незачем. Единственное исключение
+               — выправитьПрокрутку ниже: она вступает только тогда, когда
+               прокрутку уже сдвинул браузер, укоротив страницу. */
             var ч = dk.split('-');
+            var былаПрокрутка = window.pageYOffset;
             viewMonth = { year:Number(ч[0]), monthIndex:Number(ч[1]) - 1 };
             filters.date = dk;
             renderAll();
+            выправитьПрокрутку(былаПрокрутка, true);
           });
         })(g.dateKey);
         groupEl.appendChild(heading);
@@ -5245,6 +5255,40 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(top <= window.pageYOffset) return;   // список уже виден выше — дёргать нечего
     var smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({ top: top, behavior: smooth ? 'smooth' : 'auto' });
+  }
+
+  // Выбор дня укорачивает страницу — иногда в десятки раз: было сто тридцать
+  // карточек, стало четыре. Прокрутка, стоявшая ниже новой высоты, становится
+  // невозможной, и браузер прижимает её к новому пределу. Приложение при этом
+  // ничего не прокручивает (проверено подменой window.scrollTo — вызовов нет),
+  // но человек оказывается в бессмысленном месте: на десктопе это середина
+  // шапки, обрезанной сверху, на телефоне — случайная точка в списке.
+  //
+  // Раз сдвиг всё равно случился, делаем его осмысленным.
+  //
+  // На десктопе — к началу страницы: приложение там помещается в экран
+  // целиком, и шапка перестаёт быть обрезанной.
+  //
+  // На телефоне — к панели списка под верхним краем, туда же, куда целится
+  // revealListOnNarrow: выбрали день — видите, что в этом дне. И только при
+  // выборе из списка: с плитки календаря на телефоне работает сам
+  // revealListOnNarrow, он ведёт вниз, к списку, и тянуть человека вверх
+  // следом за ним значило бы спорить с ним же.
+  //
+  // Ничего не делаем, если прокрутку никто не прижимал: человек стоит там, где
+  // стоял, и дёргать страницу не за что.
+  function выправитьПрокрутку(былаПрокрутка, изСписка){
+    var предел = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    if(былаПрокрутка <= предел) return;
+    var десктоп = window.matchMedia('(min-width:842px)').matches;
+    if(!десктоп && !изСписка) return;
+    var цель = 0;
+    if(!десктоп){
+      цель = el.listPanel.getBoundingClientRect().top + window.pageYOffset - TOP_EDGE;
+      if(цель < 0) цель = 0;
+    }
+    var smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: цель, behavior: smooth ? 'smooth' : 'auto' });
   }
 
   // ---------- mobile tabs ----------
