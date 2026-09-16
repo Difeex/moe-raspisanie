@@ -1762,7 +1762,8 @@
      Поля у всех трёх одинаковые, чтобы при переходе блок не прыгал. */
   .note-block{
     display:flex;align-items:flex-start;gap:10px;
-    padding:11px 14px;border-radius:var(--radius-lg);
+    /* Угол 12px — как у карточек занятий и кнопки «Сегодня»; причина там же. */
+    padding:11px 14px;border-radius:12px;
     background:var(--surface-soft);border:1px solid var(--border-soft);
     /* Кегль 13px один на все три состояния. Раньше здесь стояли 13.5px, а
        приглашение отдельно ужималось до 13 — и написанная заметка оказывалась
@@ -1880,7 +1881,9 @@
      одного промаха. */
   .note-edit{
     display:none;flex-direction:column;gap:8px;
-    padding:11px 14px;border-radius:var(--radius-lg);
+    /* Угол тот же, что у двух других состояний заметки: иначе плашка меняла бы
+       форму в момент открытия правки. */
+    padding:11px 14px;border-radius:12px;
     background:var(--surface-strong);border:1px solid var(--accent);
     box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
   }
@@ -1996,7 +1999,13 @@
   .cards{display:flex;flex-direction:column;gap:8px}
 
   .event-card{
-    display:flex;align-items:flex-start;gap:14px;border-radius:var(--radius-lg);
+    display:flex;align-items:flex-start;gap:14px;
+    /* Угол 12px — тот же, что у кнопки «Сегодня». Общий --radius-lg (18px) для
+       карточки оказался велик: она узкая и лежит стопкой во всю высоту панели,
+       и крупные углы срезали её края заметнее, чем у любого другого элемента.
+       Тот же угол теперь и у заметки к дню — всё, что стоит в этой колонке
+       столбиком, скруглено одинаково. */
+    border-radius:12px;
     padding:14px 16px;cursor:pointer;position:relative;overflow:hidden;
     /* Размытие снято, хотя класс .glass его задаёт, — см. шапку: фон страницы
        зафиксирован, и снимок под каждым backdrop-filter пересобирается при
