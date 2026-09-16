@@ -844,14 +844,24 @@
       mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
       mask-composite:exclude;
     }
-    /* Под курсором тот же градиент, только вдвое толще — общий для приложения
-       ход. Кольцо из box-shadow здесь уже не нужно, а тень под плиткой
-       остаётся: она приходит не от кольца, а от подъёма. */
+    /* Под курсором кольцо вдвое толще и заметно плотнее: оба конца набирают по
+       80% вместо 55% у синего и 32% у песочного. В покое слабые тона уместны —
+       плитка стоит в ряду с такими же найденными днями и не должна из него
+       выбиваться; под курсором, наоборот, отклик обязан читаться сразу.
+       Значения выбраны владельцем на показе `сила-кольца-сегодня.html`.
+
+       Кольцо из box-shadow здесь уже не нужно, а тень под плиткой остаётся:
+       она приходит не от кольца, а от подъёма. */
     @media (hover:hover){
       .day-cell.is-today.has-matches:not(.selected):hover{
         box-shadow:0 14px 28px color-mix(in srgb, var(--accent) 20%, transparent);
       }
-      .day-cell.is-today.has-matches:not(.selected):hover::before{padding:2px}
+      .day-cell.is-today.has-matches:not(.selected):hover::before{
+        padding:2px;
+        background:linear-gradient(to top right,
+          color-mix(in srgb, var(--accent) 80%, transparent),
+          color-mix(in srgb, rgb(221,138,46) 80%, transparent));
+      }
     }
   }
   .day-cell.empty-day{visibility:hidden;cursor:default}
