@@ -1102,34 +1102,9 @@
     /* Выкладка та же, что у чипа даты: подпись и крестик в строку, зазор 7px.
        Считать его надо вместе с пустотой внутри рисунка — от букв до видимого
        креста выходит около 8px. */
-    display:inline-flex;align-items:center;gap:7px;
+    display:inline-flex;align-items:center;
     transition:background .12s ease, color .12s ease;
   }
-  /* Крестик появляется только вместе с возможностью нажать. Выключенный
-     счётчик — просто пометка о том, сколько занятий показано, и крест на ней
-     обещал бы действие, которого нет. */
-  .divider-count:disabled .divider-date-x{display:none}
-  /* Пока день не выбран, снимать нечего: кнопка выключена и ведёт себя как
-     обычная пометка — ни курсора, ни отклика, ни места в обходе по Tab. */
-  .divider-count:disabled{cursor:default}
-  /* Как только счётчик становится нажимаемым, он набирается основным цветом —
-     тем же, что подпись в чипе выбранного дня напротив. Это две половины
-     одного действия в одной черте, и приглушённый тон делал правую половину
-     менее заметной, чем левая. Выключенный счётчик остаётся --text-muted:
-     тогда он просто пометка, и выделять его незачем. */
-  /* Справа поле убавлено до 8px — как у чипа даты и по той же причине: там
-     стоит крест со своей пустотой внутри рисунка, и при поле в 12px он казался
-     отставленным от края сильнее, чем подпись слева. Без креста, у выключенной
-     кнопки, поля остаются одинаковыми. */
-  .divider-count:not(:disabled){cursor:pointer;color:var(--text);padding-right:8px}
-  /* Отклик тот же, что у чипов дня: счётчик стоит с ними в одной черте и
-     снимает тот же самый отбор по дате. Внутри @media (hover:hover)
-     обязательно — иначе на сенсорном экране подсветка залипает после касания. */
-  @media (hover:hover){
-    .divider-count:not(:disabled):hover{background:var(--mode);color:#fff}
-    .divider-count:not(:disabled):hover .divider-date-x{color:rgba(255,255,255,0.75)}
-  }
-  .divider-count:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* Без счётчика черта ведёт себя как прежде: сплошная линия нулевой высоты,
      с полями 6px, которые вместе с 14px промежутка панели дают привычные 20px
      воздуха с обеих сторон. Со счётчиком поля не нужны — высоту задаёт сам
@@ -2681,19 +2656,16 @@
           <span class="divider-holiday-label">Праздник</span>
         </button>
         <span class="divider-line" id="dividerLine"></span>
-        <!-- Счётчик нажимается, когда выбран день: нажатие снимает отбор по
-             дате, не трогая остальные условия. Это button, а не span, чтобы он
-             брался фокусом и нажимался с клавиатуры; пока день не выбран,
-             кнопка выключена и ведёт себя как обычная пометка. -->
-        <button class="divider-count" id="listCount" type="button" disabled>
+        <!-- Счётчик — пометка, а не кнопка. Прежде он нажимался при выбранном
+             дне и снимал отбор по дате, но с тех пор поменялись двое: слева от
+             него появился чип дня со своим крестом, который делает ровно то же,
+             а сам счётчик стал считать в пределах выбранного дня — «4 из 4»,
+             «3 из 4». То есть он описывает выбранный день, а не предлагает из
+             него выйти. Владелец попросил снять нажатие: два одинаковых
+             действия в одной черте — это не выбор, а путаница. -->
+        <span class="divider-count" id="listCount">
           <span id="listCountLabel"></span>
-          <!-- Крестик тот же, что в чипе выбранного дня: и класс, и рисунок, и
-               обрезанный по кресту viewBox. Оба снимают один и тот же отбор по
-               дате, и выглядеть они обязаны одинаково. Показывается только
-               когда кнопка включена — см. правило .divider-count:disabled. -->
-          <span class="divider-date-x"><svg viewBox="4 4 16 16" fill="none" stroke="currentColor"
-            stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
-        </button>
+        </span>
         <span class="divider-tail"></span>
       </div>
       <!-- Заметка к дню — под чертой, вместе с тем, что она называет.
@@ -4907,11 +4879,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       text = getFilteredEvents().length + ' из ' + total;
     }
     el.listCountLabel.textContent = text;
-    // Нажимается счётчик только когда есть что снимать. Без выбранного дня
-    // нажатие ничего бы не изменило, а кнопка, которая ничего не делает, —
-    // обещание, которое интерфейс не держит.
-    el.listCount.disabled = !hasDate;
-    el.listCount.title = hasDate ? 'Показать все дни, не снимая фильтров' : '';
     el.listDivider.classList.toggle('has-count', !!text);
     подогнатьТегПраздника();
   }
@@ -5524,10 +5491,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       document.fonts.ready.then(подогнатьТегПраздника);
     }
     el.dateChip.addEventListener('click', function(){ filters.date = null; renderAll(); });
-    // Счётчик снимает ровно тот же отбор по дате и ничего больше: виды работ,
-    // формат, потоки и поиск остаются как были, список возвращается к тому,
-    // что отобрано полосой сверху.
-    el.listCount.addEventListener('click', function(){ filters.date = null; renderAll(); });
 
     el.eventList.addEventListener('click', function(e){
       var typeIcon = e.target.closest('.type-icon');
