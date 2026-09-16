@@ -1200,9 +1200,22 @@
      уплотнялась до 9%.
      Крестик на тёмной заливке берёт белый вполсилы: полным он спорил бы с
      подписью, а прежний --mode на --mode не виден вовсе. */
+  /* Сегодняшний день во врезке — тот же голубой, что у его чипа в списке и что
+     у плитки в календаре: заливка `--accent` в десятую долю и синяя подпись.
+     Крестик остаётся серым, своего правила ему не даём: у всех прочих чипов он
+     тоже тусклее подписи, и синий крест спорил бы с ней за внимание. Под
+     курсором он белеет по общему правилу, как у любого чипа. */
+  .divider-date.is-today{
+    background:color-mix(in srgb, var(--accent) 10%, #fff);
+    color:var(--accent);
+  }
   @media (hover:hover){
     .divider-date:hover{background:var(--mode);color:#fff}
     .divider-date:hover .divider-date-x{color:rgba(255,255,255,0.75)}
+    /* Под курсором — как у чипа в списке: заливка своим же синим в полную
+       силу, подпись белая. Правило идёт после общего, иначе тёмный --mode
+       перекрыл бы его и сегодняшний день терял бы цвет при наведении. */
+    .divider-date.is-today:hover{background:var(--accent);color:#fff}
   }
   .cf-list{display:flex;flex-wrap:wrap;gap:6px}
   /* Read-only chips: deliberately one neutral style, without the fills the
@@ -4737,6 +4750,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       el.dateChip.style.display = 'inline-flex';
       var chipDate = dateFromKey(filters.date);
       el.dateChipLabel.textContent = formatDayHeading(chipDate, weekdayShort(chipDate));
+      // Выбранный день оказался сегодняшним — чип во врезке красится так же,
+      // как чип этого дня в общем списке. Это одно и то же место в двух
+      // положениях: пока день не выбран, он заголовок группы в списке, а как
+      // только выбран — переезжает во врезку черты. Разъезжаться по виду им
+      // нельзя, иначе «сегодня» пропадает ровно при выборе.
+      el.dateChip.classList.toggle('is-today', filters.date === formatDateKeyLocal(new Date()));
     } else {
       el.dateChip.style.display = 'none';
     }
