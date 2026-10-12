@@ -195,13 +195,21 @@
     --match-line-hover:rgba(221,138,46,0.62);
     --match-fill-hover:rgba(221,138,46,0.14);
     /* Маджента, а не прежний фиолетовый #8a7bc7: тот сидел вплотную к цветам,
-       которые примерялись форматам, и «Другое» с «Онлайном» сливались в один
-       тон. Ниша между синим лекции и красным праздника при этом остаётся
-       свободной, так что смысл цвета не поменялся — только расстояние до
-       соседей. */
-    --other:#a3559b;
-    --other-soft:rgba(163,85,155,0.16);
-    --other-line:rgba(163,85,155,0.45);
+       которые примерялись форматам, и сливался с «Онлайном» в один тон.
+       Сначала это был цвет «Другого». С появлением вебинара владелец отдал
+       маджента ему: вебинар в выгрузке есть каждую неделю, а «Другое» пустует,
+       и знакомый цвет должен остаться у того, что человек видит. */
+    --webinar:#a3559b;
+    --webinar-soft:rgba(163,85,155,0.16);
+    --webinar-line:rgba(163,85,155,0.45);
+    /* Олива — свободная ниша между зелёным семинара и оранжевым зачёта, далеко
+       от всех соседей по тону. «Другое» — вид, которого в нормальной выгрузке
+       нет вовсе; когда оно появляется, значит, вуз написал что-то незнакомое,
+       и цвет не должен путаться ни с одним настоящим видом занятия. Выбрано
+       владельцем по показу вариантов. */
+    --other:#7a8a1f;
+    --other-soft:rgba(122,138,31,0.16);
+    --other-line:rgba(122,138,31,0.45);
     /* Dusty red — reads as "not a working day" without competing with the
        lesson colours or looking like an error. */
     --holiday:#cf8288;
@@ -235,7 +243,8 @@
     --lecture-on-dark:#7aa3e8;
     --seminar-on-dark:#5fc79a;
     --exam-on-dark:#f0b268;
-    --other-on-dark:#d09ac8;
+    --webinar-on-dark:#d09ac8;
+    --other-on-dark:#c0cf62;
     --radius-xl:24px;
     --radius-lg:18px;
     --radius-md:14px;
@@ -926,7 +935,7 @@
   .day-cell.selected .day-dot[data-bucket="seminar"]{background:var(--seminar-on-dark) !important}
   .day-cell.selected .day-dot[data-bucket="exam"]{background:var(--exam-on-dark) !important}
   .day-cell.selected .day-dot[data-bucket="other"]{background:var(--other-on-dark) !important}
-  .day-cell.selected .day-dot[data-bucket="webinar"]{background:var(--other-on-dark) !important}
+  .day-cell.selected .day-dot[data-bucket="webinar"]{background:var(--webinar-on-dark) !important}
 
   /* Признак «в этом дне есть заметка» — закрашенный уголок в верхнем правом
      углу. Это единственное свободное место в ячейке: число стоит по центру
@@ -3103,6 +3112,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     seminar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M14.7 15.2c2.5.4 4.3 2.1 4.3 4.8"/></svg>',
     exam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.5 2.5L16 9.3"/></svg>',
     other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4.5M12 16h.01"/></svg>',
+    // Видеокамера: с «Онлайном» рядом в той же карточке не путается — там
+    // экран, здесь камера. Все вебинары в выгрузке онлайн, так что два значка
+    // стоят бок о бок всегда.
+    webinar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="13" height="11" rx="2.2"/><path d="M15.5 10.4 21.5 7v10l-6-3.4"/></svg>',
     online: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10.5" r="2.2"/></svg>',
     onsite: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.4 7-11.4A7 7 0 105 9.6C5 14.6 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.2"/></svg>',
     // Drawn smaller inside the same 16px box as the other chip icons, so the
@@ -3131,12 +3144,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // На распознавание это не влияет — bucketWorkType по-прежнему относит сюда
     // и «экзамен», если он когда-нибудь появится, но покажет его как зачёт.
     exam:    {label:'Зачёт', color:'var(--exam)', line:'var(--exam-line)', bg:'var(--exam-soft)', icon:ICONS.exam},
-    /* Вебинар выглядит в точности как «Другое» — тот же цвет, тот же значок.
-       Решение владельца: свой облик ему сделает приложенческая линия, а пока
-       вид отличается только подписью. Значения нарочно указывают на те же
-       переменные, а не повторяют их, — чтобы, меняя облик, их правили здесь
-       одной строкой. */
-    webinar: {label:'Вебинар', color:'var(--other)', line:'var(--other-line)', bg:'var(--other-soft)', icon:ICONS.other},
+    /* Облик вебинара выбран владельцем по показу: маджента, которая прежде
+       была у «Другого», и видеокамера. «Другое» взамен получило оливу и
+       сохранило восклицательный знак. */
+    webinar: {label:'Вебинар', color:'var(--webinar)', line:'var(--webinar-line)', bg:'var(--webinar-soft)', icon:ICONS.webinar},
     other:   {label:'Другое', color:'var(--other)', line:'var(--other-line)', bg:'var(--other-soft)', icon:ICONS.other},
     /* Вид не заполнен в выгрузке. Ни в WORK_ORDER, ни в списке форматов таких
        записей нет — значит ни чипа фильтра, ни пункта легенды они не создают.
@@ -3152,7 +3163,11 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     /* Место проведения не заполнено — см. WORK_META.none, устроено так же. */
     none:   {label:'Формат не указан', icon:'', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)'}
   };
-  var WORK_ORDER = ['lecture','seminar','exam','webinar','other'];
+  /* Вебинар — после семинара: это такая же форма занятия, как лекция и
+     семинар, и стоит вместе с ними. «Зачёт» идёт за формами как контрольное
+     событие, «Другое» замыкает ряд. Порядок общий для чипов, легенды и
+     пересказа фильтров в плавающей панели. */
+  var WORK_ORDER = ['lecture','seminar','webinar','exam','other'];
   var MONTHS_NOM = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   // Запасные короткие написания — на случай, когда полное не помещается в
   // отведённую ширину и заголовок пришлось бы переносить на две строки.
