@@ -7336,19 +7336,35 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
      и это жёсткий потолок, а не надежда на то, что человек не робот. */
   var notesSyncTimer = null;
   var notesDirtySince = 0;
+  // Когда последний раз пробовали отправить. Минутный предел держится от этой
+  // попытки, а не только от паузы в наборе.
+  var notesLastTry = 0;
 
   function scheduleNotesSync(){
     if(!syncAvailable()) return;
     if(!notesDirtySince) notesDirtySince = Date.now();
     if(notesSyncTimer) clearTimeout(notesSyncTimer);
-    // Правки копятся слишком долго — отправляем, не дожидаясь тишины.
-    if(Date.now() - notesDirtySince >= NOTES_MAX_STALE){ flushNotes(); return; }
+    /* Правки копятся слишком долго — отправляем, не дожидаясь тишины. Но не
+       чаще раза в минуту.
+
+       Без этой оговорки предел ломался ровно тогда, когда нет сети. Правки не
+       уходят, пять минут истекают, и с этого момента каждое сохранение при
+       наборе отправляло заметки немедленно. 24 сентября 2026 года так вышло
+       одиннадцать попыток за восемнадцать секунд, все впустую. */
+    if(Date.now() - notesDirtySince >= NOTES_MAX_STALE){
+      var ждать = notesLastTry + NOTES_SYNC_DELAY - Date.now();
+      if(ждать <= 0){ flushNotes(); return; }
+      notesSyncTimer = setTimeout(flushNotes, ждать);
+      return;
+    }
     notesSyncTimer = setTimeout(flushNotes, NOTES_SYNC_DELAY);
   }
 
   function flushNotes(){
     if(notesSyncTimer){ clearTimeout(notesSyncTimer); notesSyncTimer = null; }
+    notesLastTry = Date.now();
     syncPushNotes().then(function(){
+      notesPushOk();
       /* Заодно уезжает журнал. До этого он ждал следующего запуска, и всё, что
          человек делал с заметками за вечер, доезжало только назавтра — а
          спрашивают о случившемся обычно в тот же день.
@@ -7358,10 +7374,36 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
          запись подряд транспорт сам отодвинет на секунду — GitHub просит
          разносить записи в один репозиторий. */
       syncLog();
-    }, function(err){
-      logEvent('notes', 'push failed', err.kind);
-      scheduleLogSync();
-    });
+    }, notesPushFailed);
+  }
+
+  /* Отказы «нет сети» — одной записью на обрыв связи.
+
+     Без сети каждая попытка кончается одинаково, и журнал заполнялся
+     одинаковыми строками, среди которых тонуло остальное. Теперь пишется
+     первый отказ, следующие только считаются, а когда заметки наконец уйдут —
+     одна строка с числом неудачных попыток. Если отказ был всего один,
+     итоговой строки нет: записей не должно стать больше, чем было.
+
+     Прочие отказы — доступ, сервер, столкновение — пишутся каждый: они
+     разные и редкие, и каждый из них что-то значит. */
+  var notesOfflineFails = 0;
+
+  function notesPushFailed(err){
+    var kind = err && err.kind;
+    if(kind === 'offline'){
+      notesOfflineFails++;
+      if(notesOfflineFails > 1) return;
+    } else {
+      notesOfflineFails = 0;
+    }
+    logEvent('notes', 'push failed', kind);
+    scheduleLogSync();
+  }
+
+  function notesPushOk(){
+    if(notesOfflineFails > 1) logEvent('notes', 'push recovered', { failed: notesOfflineFails });
+    notesOfflineFails = 0;
   }
 
   /* Уход со страницы — единственный надёжный момент на телефоне: браузер
@@ -7804,10 +7846,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
        правка на компьютере ушла бы под чужую. Свести заметки он попросит сам,
        кнопкой. */
     if(syncAvailable()){
-      syncPushNotes().catch(function(err){
-        logEvent('notes', 'push failed', err.kind);
-        scheduleLogSync();
-      });
+      syncPushNotes().then(notesPushOk, notesPushFailed);
     }
     // Журнал уезжает последним и молча: он нужен, только когда что-то уже
     // случилось, и задерживать ради него запуск незачем.
