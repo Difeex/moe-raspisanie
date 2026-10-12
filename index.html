@@ -926,6 +926,7 @@
   .day-cell.selected .day-dot[data-bucket="seminar"]{background:var(--seminar-on-dark) !important}
   .day-cell.selected .day-dot[data-bucket="exam"]{background:var(--exam-on-dark) !important}
   .day-cell.selected .day-dot[data-bucket="other"]{background:var(--other-on-dark) !important}
+  .day-cell.selected .day-dot[data-bucket="webinar"]{background:var(--other-on-dark) !important}
 
   /* Признак «в этом дне есть заметка» — закрашенный уголок в верхнем правом
      углу. Это единственное свободное место в ячейке: число стоит по центру
@@ -3130,6 +3131,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // На распознавание это не влияет — bucketWorkType по-прежнему относит сюда
     // и «экзамен», если он когда-нибудь появится, но покажет его как зачёт.
     exam:    {label:'Зачёт', color:'var(--exam)', line:'var(--exam-line)', bg:'var(--exam-soft)', icon:ICONS.exam},
+    /* Вебинар выглядит в точности как «Другое» — тот же цвет, тот же значок.
+       Решение владельца: свой облик ему сделает приложенческая линия, а пока
+       вид отличается только подписью. Значения нарочно указывают на те же
+       переменные, а не повторяют их, — чтобы, меняя облик, их правили здесь
+       одной строкой. */
+    webinar: {label:'Вебинар', color:'var(--other)', line:'var(--other-line)', bg:'var(--other-soft)', icon:ICONS.other},
     other:   {label:'Другое', color:'var(--other)', line:'var(--other-line)', bg:'var(--other-soft)', icon:ICONS.other},
     /* Вид не заполнен в выгрузке. Ни в WORK_ORDER, ни в списке форматов таких
        записей нет — значит ни чипа фильтра, ни пункта легенды они не создают.
@@ -3145,7 +3152,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     /* Место проведения не заполнено — см. WORK_META.none, устроено так же. */
     none:   {label:'Формат не указан', icon:'', color:'var(--text-faint)', line:'var(--border-hover)', bg:'rgba(31,41,55,0.06)'}
   };
-  var WORK_ORDER = ['lecture','seminar','exam','other'];
+  var WORK_ORDER = ['lecture','seminar','exam','webinar','other'];
   var MONTHS_NOM = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   // Запасные короткие написания — на случай, когда полное не помещается в
   // отведённую ширину и заголовок пришлось бы переносить на две строки.
@@ -3403,9 +3410,24 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     // показывает «Вид занятия: Семинар+зачет» дословно, а подсказка к значку —
     // «Зачёт (Семинар+зачет)».
     if(t.indexOf('зачет')!==-1 || t.indexOf('зачёт')!==-1 || t.indexOf('экзамен')!==-1) return 'exam';
-    if(t.indexOf('лекц')!==-1) return 'lecture';
-    if(t.indexOf('семинар')!==-1) return 'seminar';
-    return 'other';
+
+    /* Остальное решает то слово, которое стоит в тексте раньше. Решение
+       владельца, 12 октября 2026 года: «Лекция-вебинар» — лекция,
+       «Вебинар-лекция» — вебинар. Прежде порядок проверок был жёстким, и
+       лекция побеждала всегда, где бы ни стояла.
+
+       Вебинар — свой вид с того же дня. С 27 сентября вуз пишет в этот столбец
+       «Вебинар ЗОсДОТ», и такие занятия уходили в «Другое». Что написано
+       после слова «вебинар», на вид не влияет: подпись чипа задана здесь, в
+       WORK_META, а полный текст из выгрузки остаётся только в карточке.
+       Формат «Очно» или «Онлайн» определяется не здесь, а местом проведения
+       (detectMode). */
+    var найдено = null, где = -1;
+    [['лекц', 'lecture'], ['семинар', 'seminar'], ['вебинар', 'webinar']].forEach(function(п){
+      var i = t.indexOf(п[0]);
+      if(i !== -1 && (где === -1 || i < где)){ где = i; найдено = п[1]; }
+    });
+    return найдено || 'other';
   }
 
   // ---------- parsing ----------
@@ -3725,8 +3747,9 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     /* Состав и период — чтобы по журналу было видно, что пришло, а не только
        сколько. 27 сентября 2026 года в выгрузке впервые появились вебинары,
        и журнал об этом промолчал. Корзины и режимы — коды самого приложения:
-       lecture, seminar, exam, other, none; online, onsite. Названий в них нет. */
-    var состав = { lecture: 0, seminar: 0, exam: 0, other: 0, none: 0, online: 0, onsite: 0 };
+       lecture, seminar, exam, webinar, other, none; online, onsite. Названий
+       в них нет. */
+    var состав = { lecture: 0, seminar: 0, exam: 0, webinar: 0, other: 0, none: 0, online: 0, onsite: 0 };
     var первый = '', последний = '';
     parsed.forEach(function(e){
       if(состав[e.workTypeBucket] !== undefined) состав[e.workTypeBucket]++;
@@ -3737,7 +3760,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     logEvent('upload', 'parsed', { lessons: newMeta.count,
       period: первый + '..' + последний,
       lecture: состав.lecture, seminar: состав.seminar, exam: состав.exam,
-      other: состав.other, none: состав.none,
+      webinar: состав.webinar, other: состав.other, none: состав.none,
       online: состав.online, onsite: состав.onsite,
       skipped: (newMeta.skipped || []).length,
       badDates: потери.badDate, orphanRows: потери.orphan, badTimes: потери.badTime,
