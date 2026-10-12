@@ -202,9 +202,6 @@
     --other:#a3559b;
     --other-soft:rgba(163,85,155,0.16);
     --other-line:rgba(163,85,155,0.45);
-    /* Amber note tone — clearly "couldn't determine", but not the red the
-       error banner uses, so it doesn't read as a failure to fix. */
-    --warn-text:#94762f;
     /* Dusty red — reads as "not a working day" without competing with the
        lesson colours or looking like an error. */
     --holiday:#cf8288;
@@ -2052,7 +2049,6 @@
   .tag.stream-tag.active{background:var(--mode);color:#fff;border-color:transparent}
   .event-detail{display:none;flex-direction:column;gap:4px;font-size:12.5px;color:var(--text-muted);padding-top:4px;border-top:1px dashed var(--line-soft);margin-top:2px}
   .event-card.expanded .event-detail{display:flex}
-  .event-detail .detail-warn{color:var(--warn-text)}
 
   /* Поля вдвое меньше прежних 50px: столько воздуха просил значок в 40px,
      стоявший над текстом. Без него прежние поля оставляли посреди панели
@@ -2951,29 +2947,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Longest first, so "Лм" wins over "Л" and "ЦК М" over "М".
   var BUILDING_CODES = Object.keys(BUILDINGS).sort(function(a,b){ return b.length - a.length; });
 
-  // ---------- restored group metadata ----------
-  // The personal-cabinet export dropped faculty and year of study, but both
-  // are properties of the student group and are recoverable from its code:
-  // an exact table for the groups seen in the earlier export, plus a
-  // prefix + digit rule for groups we have never met.
-  var STREAM_INFO = {
-    'VДБМ-301мс':   { faculty:'Факультет Спорта',                course:'3' },
-    'ДБПО-101иняз': { faculty:'Факультет Педагогики',            course:'1' },
-    'ДБПО-103мат':  { faculty:'Факультет Педагогики',            course:'1' },
-    'ДКР-301км':    { faculty:'Факультет Комьюнити-менеджмента', course:'3' },
-    'ДММ-101см':    { faculty:'Факультет Менеджмента',           course:'1' },
-    'ДММ-181см':    { faculty:'Факультет Менеджмента',           course:'1' }
-  };
-  // Keys are stored normalised (see normalizeCode) — the export spells ВДБМ
-  // with a Latin V, so both spellings must resolve to the same faculty.
-  var FACULTY_BY_PREFIX = {
-    'ДБПО': 'Факультет Педагогики',
-    'ДММ':  'Факультет Менеджмента',
-    'ДКР':  'Факультет Комьюнити-менеджмента',
-    'ВДБМ': 'Факультет Спорта'
-  };
-  var CONFUSABLES = {'A':'А','B':'В','C':'С','E':'Е','H':'Н','K':'К','M':'М','O':'О','P':'Р','T':'Т','X':'Х','Y':'У','V':'В'};
-
   // ---------- нерабочие дни РФ ----------
   // Только нерабочие праздничные дни (ст. 112 ТК РФ) и выходные, перенесённые
   // на другую дату, когда праздник выпал на выходной. Сокращённые предпраздничные
@@ -3389,56 +3362,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return 'onsite';
   }
 
-  // Latin lookalikes are folded onto Cyrillic so a group code spelled either
-  // way resolves to the same prefix.
-  function normalizeCode(s){
-    return String(s).toUpperCase().replace(/[A-Z]/g, function(ch){ return CONFUSABLES[ch] || ch; });
-  }
-
-  // Exact table first, then the prefix + digit rule. Returns null when the
-  // code carries no usable structure — we show nothing rather than guess.
-  function resolveStream(tag){
-    var t = strOrEmpty(tag);
-    if(!t) return null;
-    if(STREAM_INFO[t]) return STREAM_INFO[t];
-    var dash = t.indexOf('-');
-    if(dash === -1) return null;
-    // Prefix and digit are read independently, so a known prefix still yields
-    // the faculty even when the code carries no course digit.
-    var faculty = FACULTY_BY_PREFIX[normalizeCode(t.slice(0, dash))] || '';
-    var digit = t.slice(dash + 1).match(/^\s*(\d)/);
-    var course = digit ? digit[1] : '';
-    if(!faculty && !course) return null;
-    return { faculty: faculty, course: course };
-  }
-
-  // One lesson can serve several groups, so collect the distinct values.
-  //
-  // Course rules (a lesson is always read to groups of the same year):
-  //   * groups whose code carries no digit contribute nothing and are simply
-  //     skipped — they inherit the year from the groups that do have one;
-  //   * exactly one distinct digit across the groups -> that is the year;
-  //   * no digits at all, or two digits that disagree -> show nothing, since
-  //     a lesson cannot really span two years and the codes were misread.
-  //
-  // Faculty carries no such rule: a shared subject may legitimately be read
-  // to groups of different faculties, so those are listed together.
-  function resolveStreams(tags){
-    var faculties = [], courses = [];
-    tags.forEach(function(t){
-      var info = resolveStream(t);
-      if(!info) return;
-      if(info.faculty && faculties.indexOf(info.faculty) === -1) faculties.push(info.faculty);
-      if(info.course && courses.indexOf(info.course) === -1) courses.push(info.course);
-    });
-    return {
-      faculty: faculties.join(', '),
-      course: courses.length === 1 ? courses[0] : '',
-      // Two distinct years across the groups is a different situation from
-      // simply not being able to read any year, and the card says so.
-      courseConflict: courses.length > 1
-    };
-  }
   function formatDateKeyUTC(d){ return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate()); }
   function formatDateKeyLocal(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
   function dateFromKey(key){ var p=key.split('-').map(Number); return new Date(Date.UTC(p[0], p[1]-1, p[2])); }
@@ -3518,6 +3441,33 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return idx;
   }
 
+  /* Столбцы, которых разбор не знает.
+
+     Факультет и курс выгрузка когда-то несла отдельными столбцами, потом
+     перестала, а с 12 октября 2026 года приложение их и не выводит. Если вуз
+     вернёт их или добавит что-то новое, разбор такие столбцы пропустит молча:
+     человеку тревожиться не о чем, расписание читается как прежде. А в журнал
+     ляжет пометка — чтобы мы узнали, что в выгрузке есть данные, которые
+     приложение не разбирает, и решили, нужны ли они.
+
+     В журнал идёт не текст заголовка, а код: faculty, course или other.
+     Шапку пишет вуз, и что в ней окажется, заранее не знать. Названия
+     столбцов показывает утилита сверки, когда владелец присылает файл. */
+  function extraColumns(headerRow, idx){
+    var занятые = {};
+    Object.keys(idx).forEach(function(k){ занятые[idx[k]] = true; });
+    var виды = {}, n = 0;
+    headerRow.forEach(function(h, i){
+      var t = strOrEmpty(h).toLowerCase();
+      if(!t || занятые[i]) return;
+      n++;
+      if(t.indexOf('факультет') !== -1 || t.indexOf('институт') !== -1) виды.faculty = true;
+      else if(t.indexOf('курс') !== -1) виды.course = true;
+      else виды.other = true;
+    });
+    return n ? { count: n, kinds: Object.keys(виды).join(',') } : null;
+  }
+
   function buildEvent(row, idx, dateObj){
     var time = strOrEmpty(row[idx.time]).match(TIME_ROW_RE);
     if(!time) return null;
@@ -3525,7 +3475,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     var workTypeText = strOrEmpty(row[idx.workType]);
     var streamRaw = strOrEmpty(row[idx.stream]);
     var streamTags = streamRaw.split(/[;,]/).map(function(s){ return s.trim(); }).filter(Boolean);
-    var restored = resolveStreams(streamTags);
     return {
       dateKey: formatDateKeyUTC(dateObj),
       date: dateObj,
@@ -3540,10 +3489,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       mode: detectMode(venue),
       room: venue.room,
       streamRaw: streamRaw,
-      streamTags: streamTags,
-      faculty: restored.faculty,
-      course: restored.course,
-      courseConflict: restored.courseConflict
+      streamTags: streamTags
     };
   }
 
@@ -3636,6 +3582,8 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       var rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, blankrows:false});
       if(!rows.length) throw new Error('Файл пустой — не найдено ни одной строки. Повторите загрузку с другим файлом расписания.');
       var idx = mapHeaders(rows[0]);
+      var лишние = extraColumns(rows[0], idx);
+      if(лишние) logEvent('upload', 'extra columns', лишние);
       // The export puts each date on its own separator row and lists that
       // day's lessons underneath, so the sheet is walked top to bottom while
       // remembering the date currently in effect.
@@ -3822,8 +3770,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       return { dateKey:e.dateKey, day:e.day, start:e.start, end:e.end, discipline:e.discipline,
         workTypeText:e.workTypeText, workTypeBucket:e.workTypeBucket,
         buildingCode:e.buildingCode, building:e.building, mode:e.mode,
-        room:e.room, streamRaw:e.streamRaw, streamTags:e.streamTags,
-        faculty:e.faculty, course:e.course, courseConflict:e.courseConflict };
+        room:e.room, streamRaw:e.streamRaw, streamTags:e.streamTags };
     });
   }
 
@@ -3844,6 +3791,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       // раскладкой — и на устройстве, и в восстановленной копии.
       // Без текста пересчитывать не из чего: оставляем что было.
       if(e.workTypeText) e.workTypeBucket = bucketWorkType(e.workTypeText);
+      // Факультет и курс больше не выводятся (12 октября 2026), но записи,
+      // сохранённые прежними сборками, и копии в хранилище их несут. Снимаем
+      // при чтении, чтобы ни один будущий код не наткнулся на них и не начал
+      // снова показывать догадку. Со следующей записью они уйдут и из
+      // хранилища: serializeEvents их уже не пишет.
+      delete e.faculty;
+      delete e.course;
+      delete e.courseConflict;
       return e;
     });
   }
@@ -4792,8 +4747,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       tagsHtml += '<span class="'+cls+'" data-stream="'+escapeHtml(t)+'">'+escapeHtml(t)+'</span>';
     });
 
-    // The export carries no faculty or year of study any more, so the expanded
-    // detail shows where to actually go: the decoded building address.
+    /* Раскрытая карточка показывает то, что есть в выгрузке: где проходит
+       занятие и какого оно вида.
+
+       Факультета и курса здесь больше нет — решение владельца, 12 октября
+       2026 года. В выгрузке их нет давно, и выводились они догадкой по коду
+       группы. Правило проверили на старой таблице, где эти столбцы ещё были,
+       а новые коды — «ОКР-12609…», «VДМУП-101hm» — оно читало уже наугад:
+       факультет находился у 94 занятий из 145, курс у девяти, возможно, был
+       неверным. Ничего на эти строки не опиралось — ни фильтры, ни поиск. Коды
+       групп при этом в карточке остаются, метками выше. */
     var detailHtml = '';
     if(e.mode === 'online'){
       detailHtml += '<div>Формат: онлайн</div>';
@@ -4803,33 +4766,6 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       detailHtml += '<div>Место проведения: '+escapeHtml(e.room)+'</div>';
     }
     if(e.workTypeText) detailHtml += '<div>Вид занятия: '+escapeHtml(e.workTypeText)+'</div>';
-    // Derived from the group code, not present in the export — the tooltip
-    // says so, so the value is never mistaken for something the file carried.
-    var derivedHint = 'Определено по коду группы, в выгрузке этих данных нет';
-    if(e.faculty) detailHtml += '<div title="'+derivedHint+'">Факультет: '+escapeHtml(e.faculty)+'</div>';
-    if(e.course){
-      detailHtml += '<div title="'+derivedHint+'">Курс: '+escapeHtml(e.course)+'</div>';
-    } else if(e.streamTags.length){
-      // The row keeps the ordinary label and shows the groups themselves, so
-      // the teacher still sees who the lesson is for; only the trailing note
-      // is tinted, and in amber rather than error red so nobody re-exports
-      // the file thinking something broke.
-      // Wording agrees in number with how many groups the lesson actually has.
-      var many = e.streamTags.length > 1;
-      var warnText, warnHint;
-      if(e.courseConflict){
-        warnText = 'Внимание! Курсы не совпадают';
-        warnHint = 'У групп занятия разные курсы. В выгрузке курса нет — он определяется по коду группы.';
-      } else if(many){
-        warnText = 'Внимание! Курсы не распознаны';
-        warnHint = 'Курсы не удалось определить по кодам групп. В выгрузке этих данных нет — на само расписание это не влияет.';
-      } else {
-        warnText = 'Внимание! Курс не распознан';
-        warnHint = 'Курс не удалось определить по коду группы. В выгрузке этих данных нет — на само расписание это не влияет.';
-      }
-      detailHtml += '<div title="'+warnHint+'">Курс: '+escapeHtml(e.streamTags.join(', '))+
-        ' <span class="detail-warn">('+warnText+')</span></div>';
-    }
 
     card.innerHTML =
       '<div class="event-time"><span class="t1">'+escapeHtml(e.start)+'</span><span class="t2">'+escapeHtml(e.end)+'</span></div>'+
