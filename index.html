@@ -3700,9 +3700,57 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
   function applyPendingLoad(staged){
     if(!staged) return;
-    logEvent('schedule', 'replace confirmed',
-      { from: events.length, to: staged.events.length });
+    var запись = { from: events.length, to: staged.events.length };
+    var разница = scheduleDiff(events, staged.events);
+    Object.keys(разница).forEach(function(k){ запись[k] = разница[k]; });
+    logEvent('schedule', 'replace confirmed', запись);
     commitLoad(staged.events, staged.meta);
+  }
+
+  /* Чем новое расписание отличается от прежнего — счётчиками, для журнала.
+
+     Раньше запись о замене говорила только «было 157, стало 145». Это
+     одинаково подходит под «убрали 12», «убрали 20 и добавили 8» и «заменили
+     всё». 10 октября 2026 года, чтобы понять, что вуз снял пять ноябрьских
+     дней, понадобились копии из хранилища и сам файл выгрузки. От других
+     людей файлов выгрузки не будет никогда, у нас будет только журнал.
+
+     Занятие сравнивается целиком: день, время, дисциплина, вид, группы,
+     место. Поменялось хоть что-то — для журнала это «ушло одно, пришло
+     другое». Группы сравниваются набором, а не строкой: вуз переставляет их
+     местами от выгрузки к выгрузке («ДММ-101см , ДММ-181см» и наоборот), и
+     это не изменение.
+
+     В журнал идут только числа. Сами занятия несут дисциплины, группы и
+     аудитории, а им там не место. */
+  function scheduleDiff(was, now){
+    function key(e){
+      return [e.dateKey, e.start, e.end, e.discipline, e.workTypeText,
+              (e.streamTags || []).slice().sort().join(','), e.room, e.buildingCode].join('\u0001');
+    }
+    var осталось = {};
+    was.forEach(function(e){ var k = key(e); осталось[k] = (осталось[k] || 0) + 1; });
+    var added = 0;
+    now.forEach(function(e){
+      var k = key(e);
+      if(осталось[k]) осталось[k]--; else added++;
+    });
+    var removed = 0;
+    Object.keys(осталось).forEach(function(k){ removed += осталось[k]; });
+    var былиДни = {}, естьДни = {};
+    was.forEach(function(e){ былиДни[e.dateKey] = true; });
+    now.forEach(function(e){ естьДни[e.dateKey] = true; });
+    var d = {
+      removed: removed,
+      added: added,
+      daysGone: Object.keys(былиДни).filter(function(k){ return !естьДни[k]; }).length,
+      daysNew: Object.keys(естьДни).filter(function(k){ return !былиДни[k]; }).length
+    };
+    // Тот же файл, загруженный повторно, — случай частый: 27 сентября так
+    // было дважды подряд. По одному числу занятий его не отличить от нового
+    // файла с тем же числом.
+    if(!removed && !added) d.same = 'yes';
+    return d;
   }
 
   function commitLoad(parsed, newMeta){
@@ -3726,7 +3774,23 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     (newMeta.skipped || []).forEach(function(s){
       if(потери[s.kind] === undefined) потери.badTime++; else потери[s.kind]++;
     });
+    /* Состав и период — чтобы по журналу было видно, что пришло, а не только
+       сколько. 27 сентября 2026 года в выгрузке впервые появились вебинары,
+       и журнал об этом промолчал. Корзины и режимы — коды самого приложения:
+       lecture, seminar, exam, other, none; online, onsite. Названий в них нет. */
+    var состав = { lecture: 0, seminar: 0, exam: 0, other: 0, none: 0, online: 0, onsite: 0 };
+    var первый = '', последний = '';
+    parsed.forEach(function(e){
+      if(состав[e.workTypeBucket] !== undefined) состав[e.workTypeBucket]++;
+      if(состав[e.mode] !== undefined) состав[e.mode]++;
+      if(!первый || e.dateKey < первый) первый = e.dateKey;
+      if(!последний || e.dateKey > последний) последний = e.dateKey;
+    });
     logEvent('upload', 'parsed', { lessons: newMeta.count,
+      period: первый + '..' + последний,
+      lecture: состав.lecture, seminar: состав.seminar, exam: состав.exam,
+      other: состав.other, none: состав.none,
+      online: состав.online, onsite: состав.onsite,
       skipped: (newMeta.skipped || []).length,
       badDates: потери.badDate, orphanRows: потери.orphan, badTimes: потери.badTime,
       outliers: (newMeta.outliers || []).length,
