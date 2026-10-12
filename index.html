@@ -3765,15 +3765,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
        lecture, seminar, exam, webinar, other, none; online, onsite. Названий
        в них нет. */
     var состав = { lecture: 0, seminar: 0, exam: 0, webinar: 0, other: 0, none: 0, online: 0, onsite: 0 };
-    var первый = '', последний = '';
     parsed.forEach(function(e){
       if(состав[e.workTypeBucket] !== undefined) состав[e.workTypeBucket]++;
       if(состав[e.mode] !== undefined) состав[e.mode]++;
-      if(!первый || e.dateKey < первый) первый = e.dateKey;
-      if(!последний || e.dateKey > последний) последний = e.dateKey;
     });
+    // Период — без дат-выбросов, как в шапке и у копии.
+    var период = snapshotPeriod(parsed, newMeta.outliers) || { from: '', to: '' };
     logEvent('upload', 'parsed', { lessons: newMeta.count,
-      period: первый + '..' + последний,
+      period: период.from + '..' + период.to,
       lecture: состав.lecture, seminar: состав.seminar, exam: состав.exam,
       webinar: состав.webinar, other: состав.other, none: состав.none,
       online: состав.online, onsite: состав.onsite,
@@ -5058,16 +5057,17 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // Период, за который сформирована выгрузка, — от первого занятия до
   // последнего. Считается по самим занятиям, а не по времени загрузки: человека
   // интересует, какой отрезок семестра он сейчас видит.
+  /* Период в шапке считается так же, как у копии в хранилище, — без
+     дат-выбросов (snapshotPeriod). Решение владельца, 12 октября 2026 года:
+     одна опечатка вуза вроде «02.09.25» в расписании на осень растягивала
+     период в шапке на год, а в списке копий тот же период выглядел иначе.
+     Теперь шапка, копия и журнал всегда показывают одно и то же. */
   function eventsPeriod(){
-    if(!events.length) return '';
-    var min = events[0].dateKey, max = events[0].dateKey;
-    for(var i=1;i<events.length;i++){
-      if(events[i].dateKey < min) min = events[i].dateKey;
-      if(events[i].dateKey > max) max = events[i].dateKey;
-    }
-    return min === max
-      ? formatShortDate(min)
-      : formatShortDate(min) + ' – ' + formatShortDate(max);
+    var p = snapshotPeriod(events, meta && meta.outliers);
+    if(!p) return '';
+    return p.from === p.to
+      ? formatShortDate(p.from)
+      : formatShortDate(p.from) + ' – ' + formatShortDate(p.to);
   }
 
   // Одна группа «иконка + значение» — общий строительный блок строки сведений,
@@ -6764,8 +6764,16 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     return { name: name, period: { from: m[1], to: m[2] }, warn: !!m[3] };
   }
 
+  /* Пометка «с ошибками» на копии — только за потерянные строки: занятия,
+     которые приложение не смогло прочитать и пропустило. Такая копия
+     неполна, и в списке восстановления человек должен это видеть.
+
+     Даты-выбросы пометку не ставят — решение владельца, 12 октября 2026
+     года. Занятие с опечаткой в дате загружено и видно, расписание целое.
+     Клеймить из-за этого копию незачем; о выбросе человеку сообщает плашка
+     после загрузки, а из периода он исключён везде (snapshotPeriod). */
   function hasWarnings(m){
-    return !!(m && ((m.skipped && m.skipped.length) || (m.outliers && m.outliers.length)));
+    return !!(m && m.skipped && m.skipped.length);
   }
 
   // Занятия кладутся в том же виде, в каком лежат в браузере: без поля date,
